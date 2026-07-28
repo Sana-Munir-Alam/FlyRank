@@ -1,5 +1,6 @@
 const express = require("express");     // Pulls in the framework.
 const app = express();                  // Creates app — the object we attach routes to.
+app.use(express.json());                // Middleware that allows the app to parse JSON bodies in requests.
 
 const PORT = 3000;
 
@@ -30,6 +31,21 @@ app.get("/tasks/:id", (req,res) => {
         return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }
     res.json(task);
+});
+
+app.post("/tasks", (req,res) => {
+    const {title} = req.body;
+    if (!title || typeof title !== "string" || title.trim() === "") {
+        return res.status(400).json({ error: "Invalid task data" });
+    }
+    const newId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
+    const newTask = {
+        id: newId,
+        title,
+        done: false
+    };
+    tasks.push(newTask);
+    res.status(201).json(newTask);
 });
 
 // Simple health check route to confirm the server is running.
