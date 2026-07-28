@@ -5,7 +5,17 @@ const PORT = 3000;
 
 // Add the path and handler (where handler always get the incoming request [req] and the tool we use to respond [res])
 app.get("/", (req,res) => {
-    res.json({ message: "Hello from Express!" });
+    res.json({
+        name: "Task API",
+        version: "1.0",
+        endpoints: ["/tasks"]
+    });
+});
+
+app.get("/health", (req, res) => {
+    res.json({
+        status: "ok"
+    });
 });
 
 // Starts the server listening on that port.
