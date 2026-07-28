@@ -68,7 +68,7 @@ Create a new task:
 ```bash
 curl -i -X POST http://localhost:3000/tasks \
 -H "Content-Type: application/json" \
--d "{\"title\":\"Create New Task\"}"
+-d '{"title":"Create New Task"}'
 ```
 
 ### Example Response
