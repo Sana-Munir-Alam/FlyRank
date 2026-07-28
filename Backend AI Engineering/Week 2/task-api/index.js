@@ -1,6 +1,9 @@
-const express = require("express");     // Pulls in the framework.
-const app = express();                  // Creates app — the object we attach routes to.
-app.use(express.json());                // Middleware that allows the app to parse JSON bodies in requests.
+const express = require("express");                 // Pulls in the framework.
+const app = express();                              // Creates app — the object we attach routes to.
+const swaggerUi = require("swagger-ui-express");    // Pulls in the swagger-ui-express package.
+const openapiSpec = require("./openapi.json");      // Pulls in the OpenAPI specification file.
+app.use(express.json());                            // Middleware that allows the app to parse JSON bodies in requests.
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets up the Swagger UI route to serve the OpenAPI documentation.
 
 const PORT = 3000;
 
@@ -9,6 +12,8 @@ const tasks = [
     { id: 2, title: "Build CRUD API", done: false },
     { id: 3, title: "Test with curl", done: true }
 ];
+
+
 
 // Add the path and handler (where handler always get the incoming request [req] and the tool we use to respond [res])
 app.get("/", (req,res) => {
@@ -26,7 +31,7 @@ app.get("/tasks", (req,res) => {
 
 // returns the task with the given id, or a 404 error if not found.
 app.get("/tasks/:id", (req,res) => {
-    const task = tasks.find(t => t.id === parseInt(req.params.id));
+    const task = tasks.find(t => t.id === Number(req.params.id));
     if (!task) {
         return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }

@@ -1,0 +1,118 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Task API", "version": "1.0", "description": "A simple CRUD API for managing tasks stored in memory." },
+  "servers": [{ "url": "http://localhost:3000" }],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "API information",
+        "responses": {
+          "200": {
+            "description": "API details",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "example": "Task API" },
+                "version": { "type": "string", "example": "1.0" },
+                "endpoints": { "type": "array", "items": { "type": "string" }, "example": ["/tasks"] }
+              }
+            } } }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Server is running",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": { "status": { "type": "string", "example": "ok" } }
+            } } }
+          }
+        }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "summary": "Get all tasks",
+        "responses": {
+          "200": {
+            "description": "List of tasks",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new task",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "title": { "type": "string", "example": "Complete assignment" } },
+            "required": ["title"]
+          } } }
+        },
+        "responses": {
+          "201": { "description": "Task created successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "400": { "description": "Invalid task data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "summary": "Get task by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Task found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "404": { "description": "Task not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "put": {
+        "summary": "Update a task",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string", "example": "Finish Express project" },
+              "done": { "type": "boolean", "example": true }
+            }
+          } } }
+        },
+        "responses": {
+          "200": { "description": "Task updated successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "400": { "description": "Invalid task data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Task not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "summary": "Delete a task",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "Task deleted successfully" },
+          "404": { "description": "Task not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "title": { "type": "string", "example": "Learn Express" },
+          "done": { "type": "boolean", "example": false }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string", "example": "Task not found" } }
+      }
+    }
+  }
+}
