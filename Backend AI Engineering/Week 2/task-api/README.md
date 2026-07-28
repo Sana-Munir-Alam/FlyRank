@@ -148,9 +148,3 @@ task-api/
 | 204         | Task deleted successfully      |
 | 400         | Invalid request data           |
 | 404         | Task not found                 |
-
----
-
-## Author
-
-Developed as part of the **Week 2 – Build Your First CRUD API** assignment.
