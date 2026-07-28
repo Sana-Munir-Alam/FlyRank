@@ -68,7 +68,7 @@ Create a new task:
 ```bash
 curl -i -X POST http://localhost:3000/tasks \
 -H "Content-Type: application/json" \
--d "{\"title\":\"Buy milk\"}"
+-d "{\"title\":\"Create New Task\"}"
 ```
 
 ### Example Response
@@ -79,11 +79,11 @@ Content-Type: application/json; charset=utf-8
 
 {
   "id": 4,
-  "title": "Buy milk",
+  "title": "Create New Task",
   "done": false
 }
 ```
-
+![Terminal Screenshot 4](screenshots/terminal.png)
 ---
 
 ## Swagger UI
@@ -112,7 +112,6 @@ task-api/
 ├── package.json
 ├── package-lock.json
 ├── README.md
-└── node_modules/
 ```
 
 ---
@@ -125,6 +124,18 @@ task-api/
 * Appropriate HTTP status codes
 * JSON responses
 * Interactive Swagger documentation
+
+---
+
+## Design Decisions
+
+* **In-memory data storage:** Tasks are stored in a JavaScript array rather than a database. This matches the assignment requirements and demonstrates how CRUD operations work before introducing persistent storage. As expected, all data is reset when the server restarts.
+
+* **Robust ID generation:** Instead of assigning IDs using `tasks.length + 1`, the API calculates the next ID as the maximum existing ID plus one. This prevents duplicate IDs if tasks have been deleted before new ones are created.
+
+* **Input validation:** Both `POST` and `PUT` validate incoming data before modifying the task list. Empty or whitespace-only titles are rejected using `trim()`, ensuring only meaningful task titles are accepted. Updates also validate that `done` is a boolean value.
+
+* **Meaningful HTTP responses:** The API returns appropriate HTTP status codes for every operation (`200`, `201`, `204`, `400`, and `404`) together with JSON error messages where applicable. This makes the API predictable and easier for clients to consume while following common REST practices.
 
 ---
 
