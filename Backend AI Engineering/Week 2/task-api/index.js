@@ -33,6 +33,7 @@ app.get("/tasks/:id", (req,res) => {
     res.json(task);
 });
 
+// Creates a new task with the given title, assigns it a unique id, and adds it to the in-memory list of tasks.
 app.post("/tasks", (req,res) => {
     const {title} = req.body;
     if (!title || typeof title !== "string" || title.trim() === "") {
@@ -46,6 +47,33 @@ app.post("/tasks", (req,res) => {
     };
     tasks.push(newTask);
     res.status(201).json(newTask);
+});
+
+// Updates the task with the given id, or returns a 404 error if not found.
+app.put("/tasks/:id", (req,res) => { 
+    const taskID = Number(req.params.id);
+    const task = tasks.find( t=> t.id === taskID);
+    if (!task) {
+        return res.status(404).json({ error: `Task ${taskID} not found` });
+    }
+    const { title, done } = req.body;
+    if ((title !== undefined && (typeof title !== "string" || title.trim() === "")) || (done !== undefined && typeof done !== "boolean")) {
+        return res.status(400).json({ error: "Invalid task data" });
+    }
+    if (title !== undefined) {  task.title = title; }
+    if (done !== undefined) { task.done = done; }
+    res.json(task);
+});
+
+// Deletes the task with the given id, or returns a 404 error if not found.
+app.delete("/tasks/:id", (req,res) => {
+    const taskID = Number(req.params.id);
+    const taskIndex = tasks.findIndex(t => t.id === taskID);
+    if (taskIndex === -1) {
+        return res.status(404).json({ error: `Task ${taskID} not found` });
+    }
+    tasks.splice(taskIndex, 1);
+    res.status(204).send();
 });
 
 // Simple health check route to confirm the server is running.
