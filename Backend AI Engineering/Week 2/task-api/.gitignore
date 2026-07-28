@@ -1,1 +1,14 @@
-/node_modules
+# Dependency directories (never commit these)
+node_modules/
+
+# Mac system files
+.DS_Store
+
+# Local environment variables (contains secrets/passwords)
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+npm-debug.log*
