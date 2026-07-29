@@ -92,13 +92,11 @@ Swagger UI provides interactive documentation for all available endpoints. It al
 
 ![Swagger UI Main](screenshots/main.png)
 
-![Swagger UI Screenshot 1](screenshots/s0.png)
+![Swagger UI Screenshot 1](screenshots/S0.png)
 
-![Swagger UI Screenshot 2](screenshots/s1.png)
+![Swagger UI Screenshot 2](screenshots/S1.png)
 
 ![Swagger UI Screenshot 3](screenshots/s2.png)
-
-![Swagger UI Screenshot 4](screenshots/s3.png)
 
 ---
 
