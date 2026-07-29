@@ -35,17 +35,20 @@ app.get("/", (req,res) => {
     });
 });
 
-// Returns the complete list of tasks stored in memory.
+// Returns the complete list of tasks stored in DB
 app.get("/tasks", (req,res) => {
-    res.json(tasks);
+    const tasks = db.prepare(`SELECT * FROM tasks`).all();  // Fetches all tasks from the database
+    const formatTasks = tasks.map(task => ({...task, done:Boolean(task.done)})); // Convert done from integer to boolean
+    res.json(formatTasks);
 });
 
-// returns the task with the given id, or a 404 error if not found.
+// Returns the task with the given id, or a 404 error if not found.
 app.get("/tasks/:id", (req,res) => {
-    const task = tasks.find(t => t.id === Number(req.params.id));
+    const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(req.params.id); // Fetch task with specific id from DB
     if (!task) {
         return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }
+    task.done = Boolean(task.done);
     res.json(task);
 });
 
