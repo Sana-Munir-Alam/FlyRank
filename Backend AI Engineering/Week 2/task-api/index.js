@@ -13,8 +13,6 @@ const tasks = [
     { id: 3, title: "Test with curl", done: true }
 ];
 
-
-
 // Add the path and handler (where handler always get the incoming request [req] and the tool we use to respond [res])
 app.get("/", (req,res) => {
     res.json({
