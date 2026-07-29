@@ -52,19 +52,21 @@ app.get("/tasks/:id", (req,res) => {
     res.json(task);
 });
 
-// Creates a new task with the given title, assigns it a unique id, and adds it to the in-memory list of tasks.
+// Creates a new task with the given title and stores it in the SQLite database.
 app.post("/tasks", (req,res) => {
     const {title} = req.body;
     if (!title || typeof title !== "string" || title.trim() === "") {
         return res.status(400).json({ error: "Invalid task data" });
     }
-    const newId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
-    const newTask = {
+    const insertTask = db.prepare(`INSERT INTO tasks (title, done) VALUES (?,?)`).run(title.trim(), 0); // Insert new task into DB
+    const newId = insertTask.lastInsertRowid; // Get the ID of the newly inserted task. SQLite generates this automatically.
+    
+    const newTask = {   // Create a new task object with the assigned id, title, and default done value of false
         id: newId,
-        title,
+        title: title.trim(),
         done: false
     };
-    tasks.push(newTask);
+
     res.status(201).json(newTask);
 });
 
