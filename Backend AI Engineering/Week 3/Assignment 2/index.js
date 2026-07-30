@@ -72,28 +72,37 @@ app.post("/tasks", (req,res) => {
 
 // Updates the task with the given id, or returns a 404 error if not found.
 app.put("/tasks/:id", (req,res) => { 
-    const taskID = Number(req.params.id);
-    const task = tasks.find( t=> t.id === taskID);
+    const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(req.params.id); // Fetch task with specific id from DB
     if (!task) {
-        return res.status(404).json({ error: `Task ${taskID} not found` });
+        return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }
     const { title, done } = req.body;
     if ((title !== undefined && (typeof title !== "string" || title.trim() === "")) || (done !== undefined && typeof done !== "boolean")) {
         return res.status(400).json({ error: "Invalid task data" });
     }
-    if (title !== undefined) {  task.title = title; }
-    if (done !== undefined) { task.done = done; }
-    res.json(task);
+    if (title !== undefined) {  
+        db.prepare(`UPDATE tasks SET title = ? WHERE id = ?`).run(title.trim(), task.id); // Update the title in DB
+        task.title = title.trim();
+    }
+    if (done !== undefined) { 
+        db.prepare(`UPDATE tasks SET done = ? WHERE id = ?`).run(done ? 1 : 0, task.id); // Update the done in DB }
+        task.done = done;
+    }
+    const UpdatedTask = {   // Create an updated task object with the assigned
+        id: task.id,
+        title: task.title,
+        done: Boolean(task.done)
+    };
+    res.json(UpdatedTask);
 });
 
 // Deletes the task with the given id, or returns a 404 error if not found.
 app.delete("/tasks/:id", (req,res) => {
-    const taskID = Number(req.params.id);
-    const taskIndex = tasks.findIndex(t => t.id === taskID);
-    if (taskIndex === -1) {
-        return res.status(404).json({ error: `Task ${taskID} not found` });
+    // Using delete and checking no. of changes to determine if task was found. This way we avoid extra query of fetch in order to delete.
+    const deleteTask = db.prepare(`DELETE FROM tasks WHERE id = ?`).run(req.params.id); // Delete the task from DB
+    if(deleteTask.changes === 0){  // If no rows were deleted, the task with the given id was not found
+        return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }
-    tasks.splice(taskIndex, 1);
     res.status(204).send();
 });
 
