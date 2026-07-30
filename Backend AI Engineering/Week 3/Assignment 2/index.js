@@ -108,9 +108,7 @@ app.delete("/tasks/:id", (req,res) => {
 
 // Simple health check route to confirm the server is running.
 app.get("/health", (req, res) => {
-    res.json({
-        status: "ok"
-    });
+    res.json({ status: "ok"});
 });
 
 // Starts the server listening on that port.
