@@ -195,4 +195,4 @@ Example response:
 
 The `/reset` endpoint removes all existing tasks from the database and inserts the original three sample tasks again. This is useful for demonstrations and testing.
 
-> **Note:** Because the table uses SQLite's `AUTOINCREMENT` primary key, reset tasks may receive new IDs (for example, 5, 6, and 7 instead of 1, 2, and 3). This is expected SQLite behavior.
+> **Note:** Note: Because the table uses SQLite's `AUTOINCREMENT` primary key, IDs are never reused. After resetting the sample tasks, the recreated tasks may receive new IDs (for example, 5, 6, and 7 instead of 1, 2, and 3) instead of starting again from 1.
