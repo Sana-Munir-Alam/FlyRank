@@ -58,8 +58,7 @@ On the first run, the application automatically:
 
 The SQLite database is stored in the project root as `tasks.db`. It is created automatically on first run. All CRUD operations read from and write to this file, so data persists across server restarts.
 
-![SQLite Database](screenshots/s0.png)
-*Database inspected using DB Browser for SQLite.*
+![Database viewer](Screenshots/DB_OG.png)
 
 ---
 
@@ -95,14 +94,6 @@ Content-Type: application/json; charset=utf-8
   "done": false
 }
 ```
-
----
-
-## Database File
-
-...
-
-![Database viewer](Screenshots/DB_OG.png)
 
 ---
 
