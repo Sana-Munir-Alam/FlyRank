@@ -14,7 +14,7 @@
               "properties": {
                 "name": { "type": "string", "example": "Task API" },
                 "version": { "type": "string", "example": "1.0" },
-                "endpoints": { "type": "array", "items": { "type": "string" }, "example": ["/tasks"] }
+                "endpoints": { "type": "array", "items": { "type": "string" }, "example": [ "/tasks", "/stats", "/reset", "/health"] }
               }
             } } }
           }
@@ -37,11 +37,31 @@
     },
     "/tasks": {
       "get": {
-        "summary": "Get all tasks",
+        "summary": "Get all tasks or filter them",
+         "parameters": [
+          {
+            "name": "done",
+            "in": "query",
+            "required": false,
+            "description": "Filter tasks by completion status.",
+            "schema": { "type": "string",  "enum": ["true", "false"] }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Search tasks by title.",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of tasks",
             "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error"}}}
           }
         }
       },
@@ -97,20 +117,61 @@
           "404": { "description": "Task not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
       }
+    },
+    "/stats": {
+      "get": {
+        "summary": "Get task statistics",
+        "responses": {
+          "200": { 
+            "description": "Task statistics", 
+            "content": {"application/json": {"schema": { "$ref": "#/components/schemas/Stats" }}}
+          }
+        }
+      }
+    },
+    "/reset": {
+      "post": {
+        "summary": "Reset the task list",
+        "responses": {
+          "200": {
+            "description": "Tasks reset successfully",
+            "content": {"application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": { "type": "string", "example": "Tasks have been reset." },
+                  "tasks": { "type": "array", "items": {"$ref": "#/components/schemas/Task"}}
+                }
+              }
+            }}
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
       "Task": {
         "type": "object",
+        "required": ["id", "title", "done"],
         "properties": {
           "id": { "type": "integer", "example": 1 },
           "title": { "type": "string", "example": "Learn Express" },
           "done": { "type": "boolean", "example": false }
         }
       },
+      "Stats": {
+        "type": "object",
+        "required": ["total", "done", "open"],
+        "properties": {
+          "total": { "type": "integer", "example": 3 },
+          "done": { "type": "integer", "example": 1 },
+          "open": { "type": "integer", "example": 2 }
+        }
+      },
       "Error": {
         "type": "object",
+        "required": ["error"],
         "properties": { "error": { "type": "string", "example": "Task not found" } }
       }
     }
