@@ -68,7 +68,7 @@ app.get("/stats", (req,res) => {
 app.post("/tasks", (req,res) => {
     const {title} = req.body;
     if (!title || typeof title !== "string" || title.trim() === "") {
-        return res.status(400).json({ error: "Invalid task data" });
+        return res.status(400).json({ error: "Request body must include a valid title" });
     }
     const newId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
     const newTask = {
@@ -89,7 +89,7 @@ app.put("/tasks/:id", (req,res) => {
     }
     const { title, done } = req.body;
     if ((title !== undefined && (typeof title !== "string" || title.trim() === "")) || (done !== undefined && typeof done !== "boolean")) {
-        return res.status(400).json({ error: "Request body must include title and/or done" });
+        return res.status(400).json({ error: "error: Invalid request body" });
     }
     if (title !== undefined) {  task.title = title; }
     if (done !== undefined) { task.done = done; }
