@@ -71,6 +71,10 @@ async function resetDatabase() {        // Resets the database by truncating the
     return result.rows;
 }
 
+async function checkDatabaseHealth() {
+    await db.query("SELECT 1");
+}
+
 module.exports = {
     initializeDatabase,
     getAllTasks,
@@ -79,5 +83,6 @@ module.exports = {
     createTasks,
     updateTask,
     deleteTask,
-    resetDatabase
+    resetDatabase,
+    checkDatabaseHealth
 };

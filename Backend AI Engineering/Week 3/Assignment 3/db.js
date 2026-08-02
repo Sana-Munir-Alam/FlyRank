@@ -5,4 +5,8 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,  // Use the DATABASE_URL from the .env file for the connection string
 })
 
+pool.on("error", (err) => {
+    console.error("Unexpected error on idle database client:", err.message);
+});
+
 module.exports = pool;

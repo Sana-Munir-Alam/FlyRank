@@ -95,8 +95,13 @@ app.post("/reset", async (req, res) => {
 });
 
 // Simple health check route to confirm the server is running.
-app.get("/health", (req, res) => {
-    res.json({ status: "ok"});
+app.get("/health", async (req, res) => {
+    try {
+        await repository.checkDatabaseHealth();
+        res.json({ status: "ok", db: "ok" });
+    } catch (err) {
+        res.status(503).json({ status: "ok", db: "unreachable" });
+    }
 });
 
 // Initialize the database first and only then start the server
