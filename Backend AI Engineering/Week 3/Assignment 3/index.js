@@ -5,6 +5,9 @@ const swaggerUi = require("swagger-ui-express");    // Pulls in the swagger-ui-e
 const openapiSpec = require("./openapi.json");      // Pulls in the OpenAPI specification file.
 const repository = require("./tasksRepository");    // Pulls in the tasksRepository module.
 
+const { createClient } = require("redis");
+const redisClient = createClient({ url: "redis://redis:6379" });
+
 app.use(express.json());                            // Middleware that allows the app to parse JSON bodies in requests.
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets up the Swagger UI route to serve the OpenAPI documentation.
 
@@ -103,6 +106,23 @@ app.get("/health", async (req, res) => {
         res.status(503).json({ status: "ok", db: "unreachable" });
     }
 });
+
+redisClient.on("error", (err) => {
+    console.error("Redis connection error:", err.message);
+});
+
+repository.initializeDatabase()
+    .then(() => redisClient.connect())
+    .then(() => redisClient.ping())
+    .then((pong) => {
+        console.log("Redis says:", pong); // should log "PONG"
+        app.listen(PORT, () => {
+            console.log(`Server running on http://localhost:${PORT}`);
+        });
+    })
+    .catch((err) => {
+        console.error("Startup failed:", err);
+    });
 
 // Initialize the database first and only then start the server
 repository.initializeDatabase()
