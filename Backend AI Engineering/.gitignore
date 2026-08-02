@@ -12,3 +12,6 @@ node_modules/
 dist/
 build/
 npm-debug.log*
+
+# Database File
+**/tasks.db
