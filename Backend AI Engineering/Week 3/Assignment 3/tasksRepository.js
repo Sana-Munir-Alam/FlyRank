@@ -35,12 +35,12 @@ async function getAllTasks(done, search) {  // Fetches all tasks from the DB, op
     return result.rows;
 }
 
-async function getTaskById(id) {    // Fetches a specific task by its ID from the database
+async function getTaskById(id) {        // Fetches a specific task by its ID from the database
     const result = await db.query("SELECT * FROM tasks WHERE id = $1", [id]);
     return result.rows[0];
 }
 
-async function getTaskStats(){      // Fetches statistics about the tasks currently stored in the database
+async function getTaskStats(){          // Fetches statistics about the tasks currently stored in the database
     const totalResult = await db.query(`SELECT COUNT(*) FROM tasks`);
     const doneResult = await db.query(`SELECT COUNT(*) FROM tasks WHERE done = TRUE`);
     const total = Number(totalResult.rows[0].count);
@@ -49,9 +49,26 @@ async function getTaskStats(){      // Fetches statistics about the tasks curren
     return { total, done, open };
 }
 
-async function resetDatabase() {  // Resets the database by truncating the tasks table and reinitializing it
+async function createTasks(title){      // Creates a new task with the given title and stores it in the database
+    const result = await db.query(`INSERT INTO tasks (title) VALUES ($1) RETURNING *`, [title]);
+    return result.rows[0];
+}
+
+async function updateTask(id, title, done){   // Updates the title or/and done of a specific task by its ID in the database
+    const result = await db.query(`UPDATE tasks SET title = $1, done = $2 WHERE id = $3 RETURNING *`, [title, done, id]);
+    return result.rows[0];
+}
+
+async function deleteTask(id){          // Deletes a specific task by its ID from the database
+    const result = await db.query(`DELETE FROM tasks WHERE id = $1`,[id]);
+    return result.rowCount > 0;         // Returns true if a row was deleted, false otherwise
+}
+
+async function resetDatabase() {        // Resets the database by truncating the tasks table and reinitializing it
     await db.query(`TRUNCATE TABLE tasks RESTART IDENTITY`);
     await initializeDatabase();
+    const result = await db.query("SELECT * FROM tasks");
+    return result.rows;
 }
 
 module.exports = {
@@ -59,5 +76,8 @@ module.exports = {
     getAllTasks,
     getTaskById,
     getTaskStats,
+    createTasks,
+    updateTask,
+    deleteTask,
     resetDatabase
 };

@@ -54,54 +54,35 @@ app.get("/stats", async (req,res) => {
 });
 
 // Creates a new task with the given title and stores it in the SQLite database.
-app.post("/tasks", (req,res) => {
+app.post("/tasks", async (req,res) => {
     const {title} = req.body;
     if (!title || typeof title !== "string" || title.trim() === "") {
         return res.status(400).json({ error: "Invalid task data" });
     }
-    const insertTask = db.prepare(`INSERT INTO tasks (title, done) VALUES (?,?)`).run(title.trim(), 0); // Insert new task into DB
-    const newId = insertTask.lastInsertRowid; // Get the ID of the newly inserted task. SQLite generates this automatically.
-    
-    const newTask = {   // Create a new task object with the assigned id, title, and default done value of false
-        id: newId,
-        title: title.trim(),
-        done: false
-    };
-
-    res.status(201).json(newTask);
+    const insertTask = await repository.createTasks(title.trim()); // Insert new task into DB
+    res.status(201).json(insertTask);
 });
 
 // Updates the task with the given id, or returns a 404 error if not found.
-app.put("/tasks/:id", (req,res) => { 
-    const task = db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(req.params.id); // Fetch task with specific id from DB
-    if (!task) {
-        return res.status(404).json({ error: `Task ${req.params.id} not found` });
-    }
+app.put("/tasks/:id", async (req, res) => {
     const { title, done } = req.body;
     if ((title !== undefined && (typeof title !== "string" || title.trim() === "")) || (done !== undefined && typeof done !== "boolean")) {
         return res.status(400).json({ error: "Invalid task data" });
     }
-    if (title !== undefined) {  
-        db.prepare(`UPDATE tasks SET title = ? WHERE id = ?`).run(title.trim(), task.id); // Update the title in DB
-        task.title = title.trim();
+
+    const existingTask = await repository.getTaskById(req.params.id);
+    if (!existingTask) {
+        return res.status(404).json({ error: "Task not found" });
     }
-    if (done !== undefined) { 
-        db.prepare(`UPDATE tasks SET done = ? WHERE id = ?`).run(done ? 1 : 0, task.id); // Update the done in DB }
-        task.done = done;
-    }
-    const UpdatedTask = {   // Create an updated task object with the assigned
-        id: task.id,
-        title: task.title,
-        done: Boolean(task.done)
-    };
-    res.json(UpdatedTask);
+    // Update the task using the repository function, passing in the existing values if title or done are not provided
+    const updatedTask = await repository.updateTask(req.params.id, title ?? existingTask.title, done ?? existingTask.done);
+    res.json(updatedTask);
 });
 
 // Deletes the task with the given id, or returns a 404 error if not found.
-app.delete("/tasks/:id", (req,res) => {
-    // Using delete and checking no. of changes to determine if task was found. This way we avoid extra query of fetch in order to delete.
-    const deleteTask = db.prepare(`DELETE FROM tasks WHERE id = ?`).run(req.params.id); // Delete the task from DB
-    if(deleteTask.changes === 0){  // If no rows were deleted, the task with the given id was not found
+app.delete("/tasks/:id", async (req,res) => {
+    const deleteTask = await repository.deleteTask(req.params.id);
+    if(!deleteTask){  // If no rows were deleted, the task with the given id was not found
         return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }
     res.status(204).send();
@@ -109,8 +90,8 @@ app.delete("/tasks/:id", (req,res) => {
 
 // Resets the database by dropping the tasks table and reinitializing it.
 app.post("/reset", async (req, res) => {
-    await repository.resetDatabase();
-    res.status(204).send();
+    const tasks = await repository.resetDatabase();
+    res.json({ message: "Tasks have been reset.", tasks });
 });
 
 // Simple health check route to confirm the server is running.
