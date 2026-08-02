@@ -89,7 +89,7 @@ app.put("/tasks/:id", (req,res) => {
     }
     const { title, done } = req.body;
     if ((title !== undefined && (typeof title !== "string" || title.trim() === "")) || (done !== undefined && typeof done !== "boolean")) {
-        return res.status(400).json({ error: "Invalid task data" });
+        return res.status(400).json({ error: "Request body must include title and/or done" });
     }
     if (title !== undefined) {  task.title = title; }
     if (done !== undefined) { task.done = done; }
