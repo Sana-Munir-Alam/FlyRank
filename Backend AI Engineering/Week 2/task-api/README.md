@@ -118,7 +118,7 @@ task-api/
 
 * Full CRUD functionality
 * In-memory task storage
-* Input validation for POST and PUT requests
+* Input validation for POST, PUT, and query parameters
 * Appropriate HTTP status codes
 * JSON responses
 * Interactive Swagger documentation
@@ -131,7 +131,7 @@ task-api/
 
 * **Robust ID generation:** Instead of assigning IDs using `tasks.length + 1`, the API calculates the next ID as the maximum existing ID plus one. This prevents duplicate IDs if tasks have been deleted before new ones are created.
 
-* **Input validation:** Both `POST` and `PUT` validate incoming data before modifying the task list. Empty or whitespace-only titles are rejected using `trim()`, ensuring only meaningful task titles are accepted. Updates also validate that `done` is a boolean value.
+* **Input validation:** Both `POST` and `PUT` validate incoming data before modifying the task list. Empty or whitespace-only titles are rejected using `trim()`, ensuring only meaningful task titles are accepted. Updates also validate that `done` is a boolean value. Query parameters are also validated, ensuring that done only accepts true or false and that empty search queries are rejected with a 400 Bad Request response.
 
 * **Meaningful HTTP responses:** The API returns appropriate HTTP status codes for every operation (`200`, `201`, `204`, `400`, and `404`) together with JSON error messages where applicable. This makes the API predictable and easier for clients to consume while following common REST practices.
 
@@ -146,3 +146,41 @@ task-api/
 | 204         | Task deleted successfully      |
 | 400         | Invalid request data           |
 | 404         | Task not found                 |
+
+
+## Optional Extras
+
+### Filtering and Search
+
+The `/tasks` endpoint supports optional query parameters.
+
+- `?done=true` returns completed tasks.
+- `?done=false` returns incomplete tasks.
+- `?search=keyword` returns tasks whose title contains the given keyword.
+- Both filters can be combined in the same request.
+
+...
+
+### Task Statistics
+
+The `/stats` endpoint computes task statistics directly from the in-memory task list.
+
+Example response:
+
+- Total tasks
+- Completed tasks
+- Open tasks
+
+...
+
+### Reset Sample Data
+
+The `/reset` endpoint restores the original three sample tasks stored in memory. This is useful for demonstrations and testing without restarting the server.
+
+...
+
+### Memory Persistence Experiment
+
+I created several new tasks using the POST endpoint and confirmed they were present using `GET /tasks`. After restarting the server, the newly created tasks disappeared and only the original sample tasks remained.
+
+This happens because the application stores its data only in memory. When the Node.js process stops, the in-memory array is recreated from scratch, so any runtime changes are lost. This demonstrates why persistent storage (introduced in the next assignment) is necessary.

@@ -7,24 +7,43 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets 
 
 const PORT = 3000;
 
-const tasks = [
+const initialTasks = [
     { id: 1, title: "Learn Express", done: false },
     { id: 2, title: "Build CRUD API", done: false },
     { id: 3, title: "Test with curl", done: true }
 ];
+
+const tasks = initialTasks.map(task => ({ ...task }));  // Creates a copy of the initial tasks to be used as the in-memory data store.
 
 // Add the path and handler (where handler always get the incoming request [req] and the tool we use to respond [res])
 app.get("/", (req,res) => {
     res.json({
         name: "Task API",
         version: "1.0",
-        endpoints: ["/tasks"]
+        endpoints: ["/tasks", "/stats", "/reset", "/health"]
     });
 });
 
-// Returns the complete list of tasks stored in memory.
+// Returns the complete list of tasks stored in memory, or filters them using query parameters.
 app.get("/tasks", (req,res) => {
-    res.json(tasks);
+    let filteredTasks = tasks;
+    if (req.query.done !== undefined) {
+        if (req.query.done !== "true" && req.query.done !== "false") {
+            return res.status(400).json({error: "Invalid done query. Use true or false."});
+        }
+        const done = req.query.done === "true";
+        filteredTasks = filteredTasks.filter(task => task.done === done);
+    }
+
+    if (req.query.search !== undefined) {
+        const search = req.query.search.trim();
+        if (search === "") {
+            return res.status(400).json({error: "Search query cannot be empty."});
+        }
+        filteredTasks = filteredTasks.filter(task => task.title.toLowerCase().includes(search.toLowerCase()));
+    }
+
+    res.json(filteredTasks);
 });
 
 // returns the task with the given id, or a 404 error if not found.
@@ -34,6 +53,15 @@ app.get("/tasks/:id", (req,res) => {
         return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }
     res.json(task);
+});
+
+// Returns statistics about the tasks currently stored in memory.
+app.get("/stats", (req,res) => {
+    const total = tasks.length;
+    const done = tasks.filter(task => task.done).length;
+    const open = total - done;
+
+    res.json({ total, done, open });
 });
 
 // Creates a new task with the given title, assigns it a unique id, and adds it to the in-memory list of tasks.
@@ -77,6 +105,13 @@ app.delete("/tasks/:id", (req,res) => {
     }
     tasks.splice(taskIndex, 1);
     res.status(204).send();
+});
+
+// Restores the original sample tasks stored in memory.
+app.post("/reset", (req,res) => {
+    tasks.length = 0;
+    tasks.push(...initialTasks.map(task => ({ ...task })));
+    res.json({message: "Tasks have been reset.", tasks});
 });
 
 // Simple health check route to confirm the server is running.
