@@ -129,3 +129,239 @@ Keep-Alive: timeout=5
 
 [{"id":1,"title":"Learn Express","done":true},{"id":2,"title":"Build CRUD API","done":true},{"id":3,"title":"SQL Update Title","done":true},{"id":4,"title":"Inserting via SQL command","done":true},{"id":7,"title":"Complete Week 3 Assignment","done":false},{"id":8,"title":"Review SQL Queries","done":true},{"id":9,"title":"Push Project to GitHub","done":true},{"id":10,"title":"Test PUT Endpoint","done":false}]%                                           
 sanamuniralam@Sanas-MacBook-Air Assignment 2 % 
+
+
+
+
+/////////////////////////////////////
+         ALL ENDPOINTS TESTING
+/////////////////////////////////////
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET http://localhost:3000/
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 86
+ETag: W/"56-nw4TNyvfuPSeTA+R6KfOR3sl7Ng"
+Date: Sun, 02 Aug 2026 18:59:12 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"name":"Task API","version":"1.0","endpoints":["/tasks","/stats","/reset","/health"]}%                                                  
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % clear
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET http://localhost:3000/health
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 15
+ETag: W/"f-VaSQ4oDUiZblZNAEkkN+sX+q3Sg"
+Date: Sun, 02 Aug 2026 18:59:24 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"status":"ok"}%                                                                                                                         
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET http://localhost:3000/tasks
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 140
+ETag: W/"8c-n8So+QqrDmLoV1XzD72T14JTskc"
+Date: Sun, 02 Aug 2026 18:59:28 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+[{"id":1,"title":"Learn Express","done":false},{"id":2,"title":"Build CRUD API","done":false},{"id":3,"title":"Test with curl","done":true}]%                                                                                                                                     
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET "http://localhost:3000/tasks?done=true"
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 47
+ETag: W/"2f-r/hyV+p0Z47YqttV6s3auBIXYjY"
+Date: Sun, 02 Aug 2026 18:59:37 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+[{"id":3,"title":"Test with curl","done":true}]%                                                                                         
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET "http://localhost:3000/tasks?done=false"
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 94
+ETag: W/"5e-youe/4P8/nSWxlFfAaEUo+P79WM"
+Date: Sun, 02 Aug 2026 18:59:42 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+[{"id":1,"title":"Learn Express","done":false},{"id":2,"title":"Build CRUD API","done":false}]%                                          
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET "http://localhost:3000/tasks?search=learn"
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 47
+ETag: W/"2f-Zpq5fM5pmX70JFz/n7vvo1JKq6U"
+Date: Sun, 02 Aug 2026 18:59:49 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+[{"id":1,"title":"Learn Express","done":false}]%                                                                                         
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET "http://localhost:3000/tasks?done=false&search=build"
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 48
+ETag: W/"30-I8agy6tQZ6X7cmNw6wbqipt9HZA"
+Date: Sun, 02 Aug 2026 18:59:56 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+[{"id":2,"title":"Build CRUD API","done":false}]%                                                                                        
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET "http://localhost:3000/tasks?done=abc"
+HTTP/1.1 400 Bad Request
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 50
+ETag: W/"32-DzupJCk5lxWKQzixzBdkiYNUlkU"
+Date: Sun, 02 Aug 2026 19:00:02 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"Invalid done query. Use true or false."}%                                                                                      
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET "http://localhost:3000/tasks?search="
+HTTP/1.1 400 Bad Request
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 41
+ETag: W/"29-zGpLDfrDvlAsvRtHbnr8Z9gehm8"
+Date: Sun, 02 Aug 2026 19:00:11 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"Search query cannot be empty."}%                                                                                               
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET http://localhost:3000/tasks/2
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 46
+ETag: W/"2e-FoEnVHaw4Pfq15lMRmiHyEn8wGI"
+Date: Sun, 02 Aug 2026 19:00:17 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"id":2,"title":"Build CRUD API","done":false}%                                                                                          
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET http://localhost:3000/tasks/100
+HTTP/1.1 404 Not Found
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 30
+ETag: W/"1e-0jlA3IpglEQCZGgk+mA9ReOSVsQ"
+Date: Sun, 02 Aug 2026 19:00:21 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"Task 100 not found"}%                                                                                                          
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X GET http://localhost:3000/stats
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 29
+ETag: W/"1d-fXwZ4QWqbVw6oaVeTYg63MiOTCo"
+Date: Sun, 02 Aug 2026 19:00:29 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"total":3,"done":1,"open":2}%                                                                                                           
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X POST http://localhost:3000/tasks -H "Content-Type: application/json" -d '{"title":"Learn SQLite"}'
+HTTP/1.1 201 Created
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 44
+ETag: W/"2c-uCbOIeBqofhS7gGTYcQMu8C3DeI"
+Date: Sun, 02 Aug 2026 19:00:46 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"id":4,"title":"Learn SQLite","done":false}%                                                                                            
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X POST http://localhost:3000/tasks -H "Content-Type: application/json" -d '{"title":""}'
+HTTP/1.1 400 Bad Request
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 51
+ETag: W/"33-QBbuKNqbLtumgi3sDHkivoV+fvQ"
+Date: Sun, 02 Aug 2026 19:00:53 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"Request body must include a valid title"}%                                                                                     
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X PUT http://localhost:3000/tasks/2 -H "Content-Type: application/json" -d '{"title":"Updated Task"}'
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 44
+ETag: W/"2c-gLYnDxufLel7+vBS/u1X9+503LI"
+Date: Sun, 02 Aug 2026 19:01:13 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"id":2,"title":"Updated Task","done":false}%                                                                                            
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X PUT http://localhost:3000/tasks/2 -H "Content-Type: application/json" -d '{"done":true}'
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 43
+ETag: W/"2b-81n85zG+ywzbDZxSnLlB561AojY"
+Date: Sun, 02 Aug 2026 19:01:23 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"id":2,"title":"Updated Task","done":true}%                                                                                             
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X PUT http://localhost:3000/tasks/2 -H "Content-Type: application/json" -d '{"title":"Updated Task Twice","done":false}'
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 50
+ETag: W/"32-LHYBSouXZIHaIjJUcps/xXpSG+I"
+Date: Sun, 02 Aug 2026 19:01:38 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"id":2,"title":"Updated Task Twice","done":false}%                                                                                      
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X PUT http://localhost:3000/tasks/2 -H "Content-Type: application/json" -d '{"done":"yes"}'
+HTTP/1.1 400 Bad Request
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 39
+ETag: W/"27-xBccCz1FApC+iXEDEwPYCdMHdpA"
+Date: Sun, 02 Aug 2026 19:01:49 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"error: Invalid request body"}%                                                                                                 
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X DELETE http://localhost:3000/tasks/2
+HTTP/1.1 204 No Content
+X-Powered-By: Express
+Date: Sun, 02 Aug 2026 19:01:58 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X DELETE http://localhost:3000/tasks/100
+HTTP/1.1 404 Not Found
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 30
+ETag: W/"1e-0jlA3IpglEQCZGgk+mA9ReOSVsQ"
+Date: Sun, 02 Aug 2026 19:02:19 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"Task 100 not found"}%                                                                                                          
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % curl -i -X POST http://localhost:3000/reset
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 185
+ETag: W/"b9-5AgpUToIlznVN5pMRa6HgxXS/4w"
+Date: Sun, 02 Aug 2026 19:02:24 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"message":"Tasks have been reset.","tasks":[{"id":5,"title":"Learn Express","done":false},{"id":6,"title":"Build CRUD API","done":false},{"id":7,"title":"Test with curl","done":true}]}%                                                                                        
+sanamuniralam@Sanas-MacBook-Air Assignment 2 % 

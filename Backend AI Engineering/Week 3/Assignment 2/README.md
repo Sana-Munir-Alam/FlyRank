@@ -1,6 +1,6 @@
 # Task API
 
-A simple RESTful CRUD API built using **Node.js**, **Express.js**, and **SQLite**. The API manages a persistent list of tasks stored in a SQLite database and supports creating, reading, updating, and deleting tasks. Interactive API documentation is provided using **Swagger UI**.
+A simple RESTful CRUD API built using **Node.js**, **Express.js**, and **SQLite**. The API manages a persistent list of tasks stored in a SQLite database and supports filtering, searching, computing task statistics, and resetting the sample data in addition to standard CRUD operations. Interactive API documentation is provided using **Swagger UI**.
 
 > **Note:** Tasks are stored in a SQLite database (`tasks.db`), so all changes persist even after the server is restarted.
 
@@ -137,9 +137,12 @@ task-api/
 - SQLite database persistence
 - Automatic database and table creation
 - Automatic insertion of sample tasks on first run only
-- Input validation for POST and PUT requests
+- Input validation for POST, PUT, and query parameters
 - Appropriate HTTP status codes
 - Interactive Swagger documentation
+- Task filtering and search using query parameters
+- Task statistics endpoint
+- Reset endpoint for restoring sample data
 
 ---
 
@@ -148,7 +151,7 @@ task-api/
 - **Persistent SQLite storage:** tasks are stored in SQLite instead of an in-memory array. The API's behavior is identical to Assignment 1 — only the storage layer changed.
 - **Automatic database initialization:** the database and `tasks` table are created on first run if missing. Seed data is inserted only when the table is empty, preventing duplicate rows on restart.
 - **ID generation:** SQLite's `AUTOINCREMENT` primary key assigns unique ids automatically — no manual id-tracking logic needed, unlike the in-memory version.
-- **Input validation:** unchanged from Assignment 1 — empty/whitespace titles are rejected with `trim()`, and `done` must be a boolean on update.
+- **Input validation:** empty or whitespace-only titles are rejected using `trim()`, `done` must be a boolean on update, and query parameters are validated to ensure `done` only accepts `true` or `false` while empty search queries are rejected.
 - **Status codes:** `200`, `201`, `204`, `400`, `404` used consistently, each with a JSON error body where applicable.
 
 ---
@@ -162,3 +165,34 @@ task-api/
 | 204 | Task deleted successfully |
 | 400 | Invalid request data |
 | 404 | Task not found |
+
+## Optional Extras
+
+### Filtering and Search
+
+The `/tasks` endpoint supports optional query parameters.
+
+- `?done=true` returns completed tasks.
+- `?done=false` returns incomplete tasks.
+- `?search=keyword` returns tasks whose title contains the given keyword.
+- Both filters can be combined in the same request.
+
+### Task Statistics
+
+The `/stats` endpoint computes task statistics directly from the SQLite database.
+
+Example response:
+
+```json
+{
+  "total": 7,
+  "done": 3,
+  "open": 4
+}
+```
+
+### Reset Sample Data
+
+The `/reset` endpoint removes all existing tasks from the database and inserts the original three sample tasks again. This is useful for demonstrations and testing.
+
+> **Note:** Because the table uses SQLite's `AUTOINCREMENT` primary key, reset tasks may receive new IDs (for example, 5, 6, and 7 instead of 1, 2, and 3). This is expected SQLite behavior.

@@ -112,7 +112,7 @@ app.put("/tasks/:id", (req,res) => {
     }
     const { title, done } = req.body;
     if ((title !== undefined && (typeof title !== "string" || title.trim() === "")) || (done !== undefined && typeof done !== "boolean")) {
-        return res.status(400).json({ error: "error: Invalid request body"});
+        return res.status(400).json({ error: "Invalid request body"});
     }
     if (title !== undefined) {  
         db.prepare(`UPDATE tasks SET title = ? WHERE id = ?`).run(title.trim(), task.id); // Update the title in DB
