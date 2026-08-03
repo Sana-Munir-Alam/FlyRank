@@ -14,11 +14,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets 
 // });
 
 app.use(express.json());                            // Middleware that allows the app to parse JSON bodies in requests.
-
-async function verifySupabaseConnection() {
-    const { error } = await supabase.auth.getSession();
-    if (error) throw error;
-}
+const PORT = process.env.PORT || 3000;
 
 app.post("/auth/signup", async (req, res) => {
     try {
@@ -54,7 +50,17 @@ app.post("/auth/login", async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
+app.get("/public/info", (req,res) => {
+    res.json({ message: "This is a public endpoint. No authentication required."});
+});
+
+app.get("/protected/profile", async (req,res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Missing or invalid Authorization header" });
+    }
+    res.json({ message: "Access granted. JWT verification comes in Stage 3."});
+});
 
 // Add the path and handler (where handler always get the incoming request [req] and the tool we use to respond [res])
 app.get("/", (req,res) => {
