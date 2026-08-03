@@ -5,14 +5,54 @@ const swaggerUi = require("swagger-ui-express");    // Pulls in the swagger-ui-e
 const openapiSpec = require("./openapi.json");      // Pulls in the OpenAPI specification file.
 const repository = require("./tasksRepository");    // Pulls in the tasksRepository module.
 const supabase = require("./supabase");             // Pulls in the supabase module for database operations.
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets up the Swagger UI route to serve the OpenAPI documentation.
 
 // const { createClient } = require("redis");
 // const redisClient = createClient({
 //     url: "redis://redis:6379",
 //     socket: { reconnectStrategy: () => false } // Disable automatic reconnection
 // });
+
 app.use(express.json());                            // Middleware that allows the app to parse JSON bodies in requests.
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets up the Swagger UI route to serve the OpenAPI documentation.
+
+async function verifySupabaseConnection() {
+    const { error } = await supabase.auth.getSession();
+    if (error) throw error;
+}
+
+app.post("/auth/signup", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password are required" });
+        }
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) {
+            return res.status(error.status || 400).json({ error: error.message });
+        }
+        res.status(201).json(data.user);
+    } catch (err) {
+        console.error("Signup error:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+app.post("/auth/login", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password are required" });
+        }
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+            return res.status(401).json({ error: "Invalid login credentials" });
+        }
+        res.status(200).json({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
+    } catch (err) {
+        console.error("Login error:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 
@@ -129,6 +169,7 @@ app.get("/health", async (req, res) => {
 //     });
 
 // Initialize the database first and only then start the server
+
 repository.initializeDatabase()
     .then(() => {
         app.listen(PORT, () => {
