@@ -111,7 +111,7 @@ This confirms the API layer and the storage layer are fully separate — the API
 
 Interactive documentation for every endpoint, with a "Try it out" button to test the full CRUD cycle from the browser.
 
-![Swagger UI](Screenshots/main.png)
+![Swagger UI](Screenshots/Main.png)
 
 ---
 

@@ -90,7 +90,7 @@ Content-Type: application/json; charset=utf-8
 
 Swagger UI provides interactive documentation for all available endpoints. It allows every endpoint to be tested directly from the browser without using curl.
 
-![Swagger UI Main](screenshots/main.png)
+![Swagger UI Main](screenshots/Main.png)
 
 ![Swagger UI Screenshot 1](screenshots/S0.png)
 
