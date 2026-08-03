@@ -5,6 +5,7 @@ const swaggerUi = require("swagger-ui-express");    // Pulls in the swagger-ui-e
 const openapiSpec = require("./openapi.json");      // Pulls in the OpenAPI specification file.
 const repository = require("./tasksRepository");    // Pulls in the tasksRepository module.
 const supabase = require("./supabase");             // Pulls in the supabase module for database operations.
+const authenticate = require("./authMiddleware");
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets up the Swagger UI route to serve the OpenAPI documentation.
 
 // const { createClient } = require("redis");
@@ -54,22 +55,23 @@ app.get("/public/info", (req,res) => {
     res.json({ message: "This is a public endpoint. No authentication required."});
 });
 
-app.get("/protected/profile", async (req,res) => {
-    try{
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({ error: "Missing or invalid Authorization header" });
-        }
-        const token = authHeader.split(" ")[1];     // Extract the token from the header [0] = bearer [1] = token
-        const { data, error } = await supabase.auth.getUser(token);
-        if (error || !data.user) {
-            return res.status(401).json({ error: "Invalid or expired token" });
-        }
-        res.json({ id: data.user.id, email: data.user.email });
-    }catch (err) {
-        console.error("Profile error:", err);
-        res.status(500).json({ error: "Internal server error" });
+app.get("/protected/profile", authenticate, (req, res) => {
+    res.json({ id: req.user.id, email: req.user.email });
+});
+
+app.get("/protected/dashboard", authenticate, (req, res) => {
+    res.json({ 
+        message: `Welcome to your dashboard, ${req.user.email}!`,
+        user: { id: req.user.id, email: req.user.email }
+    });
+});
+
+app.post("/auth/logout", async (req, res) => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        return res.status(400).json({ error: error.message });
     }
+    res.json({ message: "Logged out successfully" });
 });
 
 // Add the path and handler (where handler always get the incoming request [req] and the tool we use to respond [res])
