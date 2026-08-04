@@ -6,6 +6,7 @@ const openapiSpec = require("./openapi.json");      // Pulls in the OpenAPI spec
 const repository = require("./tasksRepository");    // Pulls in the tasksRepository module.
 const supabase = require("./supabase");             // Pulls in the supabase module for database operations.
 const authenticate = require("./authMiddleware");
+const requireAdmin = require("./requireAdmin");
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets up the Swagger UI route to serve the OpenAPI documentation.
 
 // const { createClient } = require("redis");
@@ -56,7 +57,7 @@ app.get("/public/info", (req,res) => {
 });
 
 app.get("/protected/profile", authenticate, (req, res) => {
-    res.json({ id: req.user.id, email: req.user.email });
+    res.json({ id: req.user.id, email: req.user.email, created_at: req.user.created_at });
 });
 
 app.get("/protected/dashboard", authenticate, (req, res) => {
@@ -64,6 +65,30 @@ app.get("/protected/dashboard", authenticate, (req, res) => {
         message: `Welcome to your dashboard, ${req.user.email}!`,
         user: { id: req.user.id, email: req.user.email }
     });
+});
+
+app.get("/protected/admin", authenticate, requireAdmin, (req, res) => {
+    res.json({ message: "Welcome, admin." });
+});
+
+app.post("/auth/refresh", async (req, res) => {
+    try {
+        const { refresh_token } = req.body;
+        if (!refresh_token) {
+            return res.status(400).json({ error: "Refresh token required" });
+        }
+        const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+        if (error) {
+            return res.status(401).json({ error: "Invalid or expired refresh token" });
+        }
+        res.status(200).json({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token
+        });
+    } catch (err) {
+        console.error("Refresh error:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
 });
 
 app.post("/auth/logout", authenticate, async (req, res) => {
