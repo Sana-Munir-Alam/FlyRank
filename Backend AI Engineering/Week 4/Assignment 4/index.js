@@ -66,12 +66,12 @@ app.get("/protected/dashboard", authenticate, (req, res) => {
     });
 });
 
-app.post("/auth/logout", async (req, res) => {
+app.post("/auth/logout", authenticate, async (req, res) => {
     const { error } = await supabase.auth.signOut();
     if (error) {
         return res.status(400).json({ error: error.message });
     }
-    res.json({ message: "Logged out successfully" });
+    res.status(204).send();
 });
 
 // Add the path and handler (where handler always get the incoming request [req] and the tool we use to respond [res])
