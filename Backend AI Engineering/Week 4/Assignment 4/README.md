@@ -1,25 +1,25 @@
-# Task API
+# Task API — Auth & Access Control
 
-A RESTful CRUD API built with **Node.js**, **Express.js**, and **PostgreSQL**, running as a fully containerized stack via **Docker Compose**. The API supports full CRUD, filtering, search, statistics, and reset — with data persisting in a real database server, not a file or memory. The stack also includes Redis (connectivity only, for a future assignment) and a dependency-aware health check.
+A RESTful API built with **Node.js**, **Express.js**, **PostgreSQL**, and **Supabase Auth**, running as a fully containerized stack via **Docker Compose**. This stage adds real user authentication — signup, login, JWT-protected routes, token refresh, logout, and role-based access control — on top of the existing CRUD task API from prior assignments.
 
-> **Note:** Tasks are stored in PostgreSQL, running in its own Docker container with a named volume. The entire stack — app, database, and cache — starts with a single command.
+> **Note:** Auth is delegated entirely to Supabase. This API never stores passwords or issues its own tokens — it validates Supabase-issued JWTs on every protected request.
 
 ---
 
 ## Technologies Used
 
 - Node.js, Express.js
-- PostgreSQL 16 (containerized)
-- Redis 7 (containerized)
+- **Supabase Auth** (`@supabase/supabase-js`) — signup, login, session/token management
+- PostgreSQL 16 (containerized) — task storage
+- Redis 7 (containerized) — connectivity only
 - Docker & Docker Compose
-- `pg` (node-postgres driver), `redis` (Node client)
-- Swagger UI Express, OpenAPI 3.0
+- Swagger UI Express, OpenAPI 3.0 (with `bearerAuth` security scheme)
 
 ---
 
-## Why PostgreSQL + Docker?
+## Why Supabase Auth Instead of Rolling My Own?
 
-PostgreSQL is a real database server, unlike SQLite's single-file storage — it's the same engine behind a large share of production backends. Running it in Docker means no manual Postgres installation: `docker compose up` brings up an identical database on any machine, killing "works on my machine" for good. A named Docker volume keeps the data on disk outside the container, so it survives even if the container is destroyed and rebuilt.
+Building a custom auth system means owning password hashing, token signing, expiry, refresh rotation, and email verification — each one a place to get security wrong. Supabase handles all of that and exposes it through a small SDK (`supabase-js`), so the API's job shrinks to two things: call Supabase to issue a session, and validate the JWT Supabase already signed on every subsequent request. `authMiddleware.js` never decodes or verifies the JWT itself — it hands the raw token to `supabase.auth.getUser(accessToken)` and trusts Supabase's answer, which is the correct trust boundary: Supabase holds the signing key, this API never needs to.
 
 ---
 
@@ -30,258 +30,211 @@ cp .env.example .env
 docker compose up
 ```
 
-One command builds the app image, starts PostgreSQL and Redis, waits for Postgres to be genuinely ready (via a healthcheck), then starts the API. No manual database setup.
+`.env` needs `SUPABASE_URL` and `SUPABASE_KEY` in addition to the existing Postgres variables — these come from the Supabase project dashboard (Project Settings → API).
 
 - API: `http://localhost:3000`
 - Swagger UI: `http://localhost:3000/api-docs`
 
-On first boot, the app automatically:
-- Creates the `tasks` table if it doesn't exist
-- Seeds three example tasks only if the table is empty
-- Connects to Redis and logs a `PONG` on successful ping
-
-To stop everything: `docker compose down` (add `-v` only if you want to wipe the database volume too — omit it to keep your data).
-
 ---
 
-## Environment Variables
+## Auth Flow
 
-Copy `.env.example` to `.env` — the defaults work out of the box for local use:
-
-| Variable | Purpose |
-|---|---|
-| `POSTGRES_USER` | Database username |
-| `POSTGRES_PASSWORD` | Database password |
-| `POSTGRES_DB` | Database name |
-| `DATABASE_URL` | Full connection string (used when running the app outside Docker) |
-| `PORT` | Port the API listens on |
-
-`.env` is git-ignored; `.env.example` is committed with placeholder values so a stranger knows exactly what to set. Redis's connection address is set directly in code (`redis://redis:6379`, the compose service name) since it holds no secret worth externalizing for this stretch.
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Returns API information |
-| GET | `/health` | Reports app and database health (see below) |
-| GET | `/tasks` | Returns all tasks; supports `?done=true/false` and `?search=keyword` |
-| GET | `/tasks/:id` | Returns a task by ID |
-| POST | `/tasks` | Creates a new task |
-| PUT | `/tasks/:id` | Updates an existing task |
-| DELETE | `/tasks/:id` | Deletes a task |
-| GET | `/stats` | Returns `{ total, done, open }` |
-| POST | `/reset` | Restores the three sample tasks |
-
----
-
-## Example Request
+### 1. Sign Up
 
 ```bash
-curl -i -X POST http://localhost:3000/tasks \
--H "Content-Type: application/json" \
--d '{"title":"Create New Task"}'
+curl -i -X POST http://localhost:3000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"testpass123"}'
+```
+
+`POST /auth/signup` calls `supabase.auth.signUp()` and returns the created user object. No password ever touches this API's database — it's forwarded straight to Supabase, which hashes and stores it.
+
+### 2. Log In
+
+```bash
+curl -i -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"testpass123"}'
 ```
 
 ```http
-HTTP/1.1 201 Created
-Content-Type: application/json; charset=utf-8
-
-{
-  "id": 4,
-  "title": "Create New Task",
-  "done": false
-}
+HTTP/1.1 200 OK
+{"access_token":"eyJhbGciOi...","refresh_token":"wuh5gn2yprug"}
 ```
 
----
+`POST /auth/login` calls `supabase.auth.signInWithPassword()`. On success it returns an `access_token` (a short-lived JWT) and a `refresh_token`. Wrong credentials return `401`, not `400` — the request was well-formed, the identity check failed.
 
-## Data in the Database
-
-Verified directly with `psql` inside the running container:
+### 3. Access a Protected Route
 
 ```bash
-docker exec -it tasks-postgres psql -U taskuser -d tasksdb -c "\dt"
-docker exec -it tasks-postgres psql -U taskuser -d tasksdb -c "SELECT * FROM tasks;"
+curl -i http://localhost:3000/protected/profile \
+  -H "Authorization: Bearer <access_token>"
 ```
 
-![PostgreSQL data](screenshots/postgres-data.png)
+```http
+HTTP/1.1 200 OK
+{"id":"f041f24f-...","email":"test@example.com","created_at":"2026-08-04T10:10:29.95Z"}
+```
 
----
+Every protected route expects `Authorization: Bearer <token>`. `authMiddleware.js` rejects the request with `401` before touching the route handler if the header is missing, malformed, or the token doesn't validate against Supabase. Only on success does it attach `req.user` and call `next()`.
 
-## Proving Persistence Across a Full-Stack Restart
-
-The core requirement of this assignment: create data, tear down *both* containers, bring them back up, and confirm the data survived — because a named Docker volume, not the containers themselves, is what keeps the rows alive.
+### 4. Refresh an Expired Token
 
 ```bash
-$ curl -i -X POST http://localhost:3000/tasks \
+curl -i -X POST http://localhost:3000/auth/refresh \
   -H "Content-Type: application/json" \
-  -d '{"title":"Full stack persistence check"}'
-HTTP/1.1 201 Created
-{"id":4,"title":"Full stack persistence check","done":false}
-
-$ docker compose down
- ✔ Container assignment3-api-1 Removed
- ✔ Container assignment3-db-1  Removed
- ✔ Network assignment3_default Removed
-
-$ docker compose up
- ✔ Container assignment3-db-1  Created
- ✔ Container assignment3-api-1 Created
-Container assignment3-db-1 Healthy
-api-1  | Server running on http://localhost:3000
-
-$ curl -i http://localhost:3000/tasks
-HTTP/1.1 200 OK
-[{"id":1,...},{"id":2,...},{"id":3,...},{"id":4,"title":"Full stack persistence check","done":false}]
+  -d '{"refresh_token":"<refresh_token>"}'
 ```
 
-Task 4 survived a complete teardown of both containers — proof the volume, not the running process, owns the data.
+Returns a new `access_token`/`refresh_token` pair via `supabase.auth.refreshSession()`, so a client never has to force the user to log in again just because the short-lived access token expired.
+
+### 5. Log Out
+
+```bash
+curl -i -X POST http://localhost:3000/auth/logout \
+  -H "Authorization: Bearer <access_token>"
+```
+
+`POST /auth/logout` is itself a protected route — you must present a valid token to invalidate it — then calls `supabase.auth.signOut()` and returns `204 No Content`.
 
 ---
 
-## Swagger UI
+## Public vs. Protected vs. Admin-Only
 
-![Swagger UI](screenshots/Main.png)
-
----
-
-## The API Never Changed — Only the Storage Did
-
-This is the third storage engine for the same API, in the same repo:
-
-| Assignment | Where tasks live | What runs it |
+| Route | Auth Required | Notes |
 |---|---|---|
-| A1 | A JavaScript array | The Node process |
-| A2 | A `tasks.db` file | SQLite, on disk |
-| A3 (this) | Rows in a `tasks` table | PostgreSQL, in a container |
+| `GET /public/info` | No | Sanity check that unauthenticated routes still work unmodified |
+| `GET /protected/profile` | Yes | Returns the authenticated user's own id/email/created_at |
+| `GET /protected/dashboard` | Yes | Second protected route, proves the same middleware is reusable across handlers |
+| `GET /protected/admin` | Yes + admin role | Demonstrates middleware **stacking** |
 
-Across all three, the routes and their behavior — request shapes, response shapes, status codes — never changed. Only the code inside `tasksRepository.js` did. That's the actual point of a repository module: swapping storage should touch one file, not the routes built on top of it.
-
----
-
-## Extra: A Real Health Check (and What Broke When I Built It)
-
-`GET /health` doesn't just say "the process is running" — it actively runs `SELECT 1` against Postgres on every call, so it can tell the difference between "the app is up" and "the app is up but its database is unreachable."
-
-```js
-app.get("/health", async (req, res) => {
-    try {
-        await repository.checkDatabaseHealth();
-        res.json({ status: "ok", db: "ok" });
-    } catch (err) {
-        res.status(503).json({ status: "ok", db: "unreachable" });
-    }
-});
-```
-
-`503 Service Unavailable` is used deliberately instead of `500` — it signals "I'm fine, but a dependency isn't," which is exactly what load balancers and orchestration tools (Kubernetes, AWS health checks) watch for to decide whether to keep routing traffic to an instance.
-
-**Testing this the first time crashed the whole app**, not just the health route. Stopping the `db` container killed an *idle* connection in `pg`'s connection pool — not the one being actively queried — and `pg` emitted an unhandled `'error'` event on the pool itself. In Node, an unhandled `EventEmitter` error is fatal by default, so the entire `api` container crashed instead of the health check gracefully reporting `503`. The fix was a single listener in `db.js`:
-
-```js
-pool.on("error", (err) => {
-    console.error("Unexpected error on idle database client:", err.message);
-});
-```
-
-Verified both directions:
+**Public route, unauthenticated:**
 
 ```bash
-$ docker compose stop db
-$ curl -i http://localhost:3000/health
-HTTP/1.1 503 Service Unavailable
-{"status":"ok","db":"unreachable"}
-
-$ docker compose start db
-$ curl -i http://localhost:3000/health
+$ curl -i http://localhost:3000/public/info
 HTTP/1.1 200 OK
-{"status":"ok","db":"ok"}
+{"message":"This is a public endpoint. No authentication required."}
 ```
 
-The app stayed alive through the outage both times — the fix works, and the failure mode it fixes is a real one, not a hypothetical.
-
----
-
-## Extra: Index + `EXPLAIN ANALYZE`
-
-To make the comparison meaningful, the table was seeded with 5,000 additional rows before measuring (removed afterward via `POST /reset`).
-
-### Before: Sequential Scan (no index)
-
-![EXPLAIN ANALYZE before index](screenshots/explain-before.png)
-
-### After: Bitmap Heap Scan (with index on `done`)
-
-![EXPLAIN ANALYZE after index](screenshots/explain-after.png)
-
-Execution time barely changed (1.00ms → 1.13ms) even though the plan switched to a `Bitmap Heap Scan`. With `done` being a boolean and roughly a third of rows matching `true`, the index doesn't reduce how much data Postgres has to touch — this is a known limitation of indexing low-cardinality columns, and a good illustration that the query planner optimizes based on actual cost, not just "an index exists, therefore use it."
-
----
-
-## Extra: Redis Added to the Stack
-
-A `redis` service was added to `docker-compose.yml`, with the app connecting and pinging it once at startup — laying groundwork for caching in a later assignment, not implementing caching yet.
+**Protected route, no token:**
 
 ```bash
-api-1 | Server running on http://localhost:3000
-api-1 | Redis says: PONG
+$ curl -i http://localhost:3000/protected/profile
+HTTP/1.1 401 Unauthorized
+{"error":"Missing or invalid Authorization header"}
 ```
 
-Connection uses the compose service name (`redis://redis:6379`), the same networking pattern as the `db` service — inside the compose network, containers reach each other by service name, not `localhost`. An error listener was attached to the Redis client from the start, applying the same lesson learned from the Postgres pool crash above rather than waiting to hit it a second time.
+**Protected route, valid token:**
 
-> **Note** Redis connectivity is scoped to the Docker Compose stack; running the app directly via node index.js outside Docker will not resolve the redis hostname, which is expected.
+```bash
+$ curl -i http://localhost:3000/protected/profile \
+  -H "Authorization: Bearer <access_token>"
+HTTP/1.1 200 OK
+{"id":"...", "email":"test@example.com", "created_at":"..."}
+```
+
+### Admin-Only Route
+
+`GET /protected/admin` stacks two middlewares — `authenticate` then `requireAdmin`:
+
+```js
+app.get("/protected/admin", authenticate, requireAdmin, (req, res) => {
+    res.json({ message: "Welcome, admin." });
+});
+```
+
+`requireAdmin` runs strictly after `authenticate`, since it reads `req.user.user_metadata.role`, which only exists once `authenticate` has populated `req.user`. A non-admin user gets past the token check but is stopped here:
+
+```bash
+$ curl -i -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"swagger@example.com","password":"password123"}'
+HTTP/1.1 200 OK
+{"access_token":"..."}
+
+$ curl -i http://localhost:3000/protected/admin \
+  -H "Authorization: Bearer <access_token>"
+HTTP/1.1 403 Forbidden
+{"error":"Admins only"}
+```
+
+An admin user (role set in Supabase's `user_metadata`) gets through both layers:
+
+```bash
+$ curl -i http://localhost:3000/protected/admin \
+  -H "Authorization: Bearer <admin_access_token>"
+HTTP/1.1 200 OK
+{"message":"Welcome, admin."}
+```
+
+This is the point of splitting `authenticate` and `requireAdmin` into two separate middlewares rather than one combined check: `authenticate` answers *"who is this?"* and is reused on every protected route; `requireAdmin` answers *"are they allowed to do this specific thing?"* and only gets attached where it's needed. Mixing the two into one function would mean duplicating the token-validation logic anywhere a non-admin-but-still-protected route was needed.
 
 ---
 
 ## Design Decisions
 
-- **Repository pattern, enforced:** every database call lives in `tasksRepository.js`. Routes call repository functions and know nothing about SQL or which database engine is underneath.
-- **Healthcheck on `db`, gating `api`'s startup:** `depends_on: condition: service_healthy` (not just `depends_on: [db]`) ensures the app doesn't attempt to connect until Postgres has actually finished its startup sequence — plain `depends_on` only waits for the container to exist, not for the database inside it to be ready.
-- **No hardcoded secrets, including in `docker-compose.yml`:** credentials are referenced as `${POSTGRES_USER}` etc., substituted automatically from `.env` at compose time. The compose file itself, committed to git, contains no real password.
-- **`RETURNING *` on INSERT/UPDATE:** Postgres hands back the affected row directly from the same query, removing the separate "insert, then fetch what I just inserted" step SQLite required.
-- **Reset uses `TRUNCATE ... RESTART IDENTITY`:** unlike the A2 SQLite version (where reset tasks kept climbing ids, e.g. 5, 6, 7), this resets the id sequence itself, so reset tasks always come back as 1, 2, 3.
-- **Pool-level error handling:** both the Postgres pool and the Redis client have `.on("error", ...)` listeners, learned directly from a real crash during health-check testing rather than added defensively up front.
-- **Naming:** container/database/volume names in this project (`tasks-postgres`, `tasksdb`, `taskuser`, `tasks-pgdata`) differ from example names used in some guides (`taskdb`, default `postgres` user) — an intentional choice, kept consistent across `.env`, `docker-compose.yml`, and all commands in this README.
+- **Supabase owns identity, this API owns authorization.** `authMiddleware.js` only asks "is this token valid, and who is it," via `supabase.auth.getUser()`. Anything role- or permission-based (`requireAdmin`) is decided here, using data Supabase returns, but Supabase itself has no concept of "admin" for this app — that's `user_metadata`, set by us.
+- **Auth middleware fails closed.** Missing header, malformed header, invalid token, or an unexpected error during validation all return before `next()` is called. There's no code path where a request reaches a protected handler without a verified `req.user`.
+- **`requireAdmin` assumes `authenticate` already ran.** It doesn't re-verify the token or handle a missing `req.user` — it's not meant to be mounted standalone. Route order (`authenticate, requireAdmin, handler`) is what makes this safe, not defensive checks inside `requireAdmin` itself.
+- **401 vs 403, used deliberately.** `401` means "I don't know who you are" (no token, bad token, expired token). `403` means "I know exactly who you are, and the answer is no" (valid token, wrong role). Collapsing these into one status code would hide *why* a request failed from the client.
+- **Refresh is a separate unauthenticated endpoint.** `POST /auth/refresh` doesn't require a Bearer token — it requires a valid `refresh_token` in the body instead, since by definition a client calling it may have an *expired* access token and nothing else.
+- **Logout is a protected endpoint.** Requiring a valid Bearer token to call `/auth/logout` means you can't invalidate a session you don't already hold — logging out is itself an authenticated action.
+- **No hardcoded secrets:** `SUPABASE_URL` and `SUPABASE_KEY` are read from environment variables, injected via `docker-compose.yml` from `.env`, which is git-ignored.
 
 ---
 
-## Optional Extras
+## Task API (Second Priority — Unaffected by This Stage)
 
-### Filtering and Search
-`?done=true/false` and `?search=keyword` on `GET /tasks`, both combinable, implemented as parameterized SQL `WHERE`/`LIKE` clauses.
+The task CRUD API from the previous assignment is unchanged and still runs on PostgreSQL, unauthenticated, as a separate concern from user identity:
 
-### Task Statistics
-`GET /stats` computes `{ total, done, open }` via `SELECT COUNT(*)` in Postgres, not application-level counting.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/tasks` | All tasks; supports `?done=true/false` and `?search=keyword` |
+| GET | `/tasks/:id` | Task by ID |
+| POST | `/tasks` | Create a task |
+| PUT | `/tasks/:id` | Update a task |
+| DELETE | `/tasks/:id` | Delete a task |
+| GET | `/stats` | `{ total, done, open }` |
+| POST | `/reset` | Restore the three sample tasks |
+| GET | `/health` | App + DB health (`503` if Postgres is unreachable) |
 
-### Reset Sample Data
-`POST /reset` truncates the table and reseeds the three example tasks, with ids reset to 1, 2, 3.
-
-### Real Health Check, Index + `EXPLAIN ANALYZE`, Redis
-See dedicated sections above.
+These routes intentionally remain public in this stage — the assignment scope was adding auth as a new layer (signup/login/protected routes/refresh/logout/roles), not retrofitting every existing endpoint with `authenticate`. `/tasks` still runs against the same repository pattern and Postgres container as before; nothing about its behavior, request shapes, or response shapes changed.
 
 ---
 
-## HTTP Status Codes Used
+## Swagger / OpenAPI
 
-| Status Code | Meaning |
+`openapi.json` documents every auth route (`/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout`) alongside the protected routes, each with a `bearerAuth` security requirement so Swagger UI's "Authorize" button correctly attaches the token to protected requests when testing interactively at `/api-docs`.
+
+```json
+"securitySchemes": {
+  "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+}
+```
+
+---
+
+## Environment Variables
+
+| Variable | Purpose |
 |---|---|
-| 200 | Request completed successfully |
-| 201 | Task created successfully |
-| 204 | Task deleted successfully |
-| 400 | Invalid request data |
-| 404 | Task not found |
-| 503 | Server running, but database unreachable |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_KEY` | Supabase anon/public API key |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Task database credentials |
+| `DATABASE_URL` | Full Postgres connection string |
+| `PORT` | Port the API listens on |
 
 ---
 
 ## Project Structure
 
 ```text
-Assignment 3/
+Assignment 4/
 ├── index.js
 ├── db.js
+├── supabase.js
+├── authMiddleware.js
+├── requireAdmin.js
 ├── tasksRepository.js
 ├── openapi.json
 ├── Dockerfile
@@ -291,5 +244,4 @@ Assignment 3/
 ├── package.json
 ├── package-lock.json
 ├── README.md
-└── screenshots/
 ```
