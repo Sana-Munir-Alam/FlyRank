@@ -9,11 +9,11 @@ const authenticate = require("./authMiddleware");
 const requireAdmin = require("./requireAdmin");
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));    // Sets up the Swagger UI route to serve the OpenAPI documentation.
 
-// const { createClient } = require("redis");
-// const redisClient = createClient({
-//     url: "redis://redis:6379",
-//     socket: { reconnectStrategy: () => false } // Disable automatic reconnection
-// });
+const { createClient } = require("redis");
+const redisClient = createClient({
+    url: "redis://redis:6379",
+    socket: { reconnectStrategy: () => false } // Disable automatic reconnection
+});
 
 app.use(express.json());                            // Middleware that allows the app to parse JSON bodies in requests.
 const PORT = process.env.PORT || 3000;
@@ -193,33 +193,21 @@ app.get("/health", async (req, res) => {
     }
 });
 
-// redisClient.on("error", (err) => {
-//     console.error("Redis connection error:", err.message);
-// });
+redisClient.on("error", (err) => {
+    console.error("Redis connection error:", err.message);
+});
 
 // Initialise the db first, then connect to Redis, then start the server.
-// repository.initializeDatabase()
-//     .then(() => redisClient.connect())
-//     .then(() => redisClient.ping())
-//     .then((pong) => {
-//         console.log("Redis says:", pong); // should log "PONG"
-//         app.listen(PORT, () => {
-//             console.log(`Server running on http://localhost:${PORT}`);
-//         });
-//     })
-//     .catch((err) => {
-//         console.error("Startup failed:", err);
-//     });
-
-// Initialize the database first and only then start the server
-
 repository.initializeDatabase()
-    .then(() => {
+    .then(() => redisClient.connect())
+    .then(() => redisClient.ping())
+    .then((pong) => {
+        console.log("Redis says:", pong); // should log "PONG"
         app.listen(PORT, () => {
             console.log(`Server running on http://localhost:${PORT}`);
             console.log("Server running and connected to Supabase");
         });
     })
     .catch((err) => {
-        console.error("Database connection failed:", err);
+        console.error("Startup failed:", err);
     });
