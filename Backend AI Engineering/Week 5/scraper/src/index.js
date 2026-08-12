@@ -4,120 +4,153 @@ const cheerio = require("cheerio");
 
 const START_URL = "https://books.toscrape.com/catalogue/page-1.html";
 const CACHE_DIR = path.join(__dirname, "..", "cache");
-
 const USER_AGENT = "FlyRankInternship-A9/1.0 (+https://github.com/sana-munir-alam/flyrank)";
 const REQUEST_DELAY = 500;
+const REQUEST_TIMEOUT = 5000;
 const MAX_CATALOGUE_PAGES = 3;
 
-// Wait for a specified number of milliseconds.
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Fetch a URL and return its HTML. If the HTML is already cached, use the cached version instead.
-async function getPage(URL, pageNumber) {
-    const cacheFile = path.join( CACHE_DIR, `catalogue-page-${pageNumber}.html`);
-    // Try Cache First
+async function getPage(url, cacheFile) {
     try {
         const html = await fs.readFile(cacheFile, "utf8");
-        console.log(`CACHE HIT page=${pageNumber}`);
-        return { html, fromCache: true };
+        const stats = await fs.stat(cacheFile);
+        console.log(`CACHE HIT ${cacheFile}`);
+        return { html, fromCache: true, fetchedAt: stats.mtime.toISOString() };
     } catch (error) {
-        if (error.code !== "ENOENT") {
-            throw error;
-        }
+        if (error.code !== "ENOENT") throw error;
     }
 
-    // Page isn't cached, so make a real network request
-    console.log(`FETCH page=${pageNumber}`);
+    console.log(`FETCH ${url}`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => { controller.abort(); }, 5000);
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    const fetchedAt = new Date().toISOString();
 
     try {
-        const response = await fetch(URL, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
-        if (response.status !== 200) {
-            throw new Error( `Request failed with status ${response.status}` );
-        }
-
-        const html = await response.text();                 // Read the raw HTML
-        await fs.mkdir(CACHE_DIR, { recursive: true });     // Make sure the cache directory exists
-        await fs.writeFile(cacheFile, html, "utf8");       // Save the HTML
-        
-        console.log( `SAVED page=${pageNumber} size=${Buffer.byteLength( html, "utf8" )} bytes` );
-        return { html, fromCache: false };
+        const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
+        if (response.status !== 200) throw new Error(`Request failed with status ${response.status}`);
+        const html = await response.text();
+        await fs.mkdir(path.dirname(cacheFile), { recursive: true });
+        await fs.writeFile(cacheFile, html, "utf8");
+        return { html, fromCache: false, fetchedAt };
     } catch (error) {
-        if (error.name === "AbortError") {
-            throw new Error( `Request for page ${pageNumber} timed out after 5 seconds.` );
-        }
+        if (error.name === "AbortError") throw new Error(`Request timed out after ${REQUEST_TIMEOUT}ms: ${url}`);
         throw error;
     } finally {
         clearTimeout(timeoutId);
     }
 }
 
-// Find the book links on a catalogue page.
-function extractBookLinks(html, pageURL) {
-    const $ = cheerio.load(html);
-    const bookURLs = [];
-    // For each book link, extract the href attribute and convert it to an absolute URL.
-    $("article.product_pod h3 a").each((index, element) => {    
-        const href = $(element).attr("href");
-        if (!href) { return; }
-        const absoluteURL = new URL(href, pageURL).href;        // Convert relative URL into an absolute URL.
-        bookURLs.push(absoluteURL);                             // Add the absolute URL to the list of book URLs.
-    });
-    return bookURLs;
+function cacheFileForUrl(url) {
+    const parsedUrl = new URL(url);
+    const filename = parsedUrl.pathname.replace(/^\/+/, "").replace(/\//g, "_");
+    return path.join(CACHE_DIR, "books", filename); // no appended .html this time
 }
 
-// Find the catalogue page's "next" link.
-function findNextPage(html, pageURL) {
+function extractBookLinks(html, pageUrl) {
+    const $ = cheerio.load(html);
+    const bookUrls = [];
+    $("article.product_pod h3 a").each((index, element) => {
+        const href = $(element).attr("href");
+        if (!href) return;
+        const absoluteUrl = new URL(href, pageUrl).href;
+        bookUrls.push(absoluteUrl);
+    });
+    return bookUrls;
+}
+
+function findNextPage(html, pageUrl) {
     const $ = cheerio.load(html);
     const nextHref = $("li.next a").attr("href");
-    if (!nextHref) { return null; }
-    return new URL(nextHref, pageURL).href;
+    if (!nextHref) return null;
+    return new URL(nextHref, pageUrl).href;
 }
 
-// Main crawler.
+async function discoverBooks() {
+    let currentPageUrl = START_URL;
+    const discoveredBooks = [];
+    let cataloguePages = 0;
+
+    while (currentPageUrl && cataloguePages < MAX_CATALOGUE_PAGES) {
+        cataloguePages++;
+        const catalogueCacheFile = path.join(CACHE_DIR, `catalogue-page-${cataloguePages}.html`);
+        console.log(`\nProcessing catalogue page ${cataloguePages}`);
+
+        const { html, fromCache } = await getPage(currentPageUrl, catalogueCacheFile);
+        const bookUrls = extractBookLinks(html, currentPageUrl);
+
+        console.log(`Found ${bookUrls.length} book links`);
+
+        for (const productUrl of bookUrls) {
+            discoveredBooks.push({ productUrl, sourcePage: currentPageUrl });
+        }
+
+        const nextPageUrl = findNextPage(html, currentPageUrl);
+        if (!nextPageUrl) break;
+
+        currentPageUrl = nextPageUrl;
+
+        if (!fromCache && cataloguePages < MAX_CATALOGUE_PAGES) await sleep(REQUEST_DELAY);
+    }
+
+    const uniqueBooks = [];
+    const seen = new Set();
+
+    for (const book of discoveredBooks) {
+        if (seen.has(book.productUrl)) continue;
+        seen.add(book.productUrl);
+        uniqueBooks.push(book);
+    }
+
+    return { books: uniqueBooks, cataloguePages };
+}
+
+function extractBookRecord(html, productUrl, sourcePage, fetchedAt) {
+    const $ = cheerio.load(html);
+    const productArea = $("article.product_page");
+    const title = productArea.find("div.product_main h1").first().text().trim() || null;
+    const priceText = productArea.find("p.price_color").first().text().trim() || null;
+    const availabilityText = productArea.find("p.instock.availability").first().text().replace(/\s+/g, " ").trim() || null;
+    const ratingText = productArea.find("p.star-rating").first().attr("class")?.replace("star-rating", "").trim() || null;
+    const description = $("#product_description").next("p").first().text().trim() || null;
+
+    return { title, product_url: productUrl, price_text: priceText, availability_text: availabilityText, rating_text: ratingText, description, source_page: sourcePage, fetched_at: fetchedAt };
+}
+
+async function fetchBookRecord(productUrl, sourcePage) {
+    const cacheFile = cacheFileForUrl(productUrl);
+    const { html, fromCache, fetchedAt } = await getPage(productUrl, cacheFile);
+    if (!fromCache) await sleep(REQUEST_DELAY); // only delay on real network hits
+    return extractBookRecord(html, productUrl, sourcePage, fetchedAt);
+}
+
 async function main() {
     await fs.mkdir(CACHE_DIR, { recursive: true });
 
-    let currentPageURL = START_URL;
-    const discoveredURLs = [];
-    let cataloguePages = 0;
+    const { books, cataloguePages } = await discoverBooks();
 
-    while ( currentPageURL && cataloguePages < MAX_CATALOGUE_PAGES ) {
-        cataloguePages++;
-        console.log(`\nProcessing catalogue page ${cataloguePages}`);
-        console.log(currentPageURL);
+    console.log(`\ncatalogue_pages=${cataloguePages}`);
+    console.log(`discovered=${books.length}`);
+    console.log(`unique_urls=${books.length}`);
 
-        const { html, fromCache } = await getPage( currentPageURL, cataloguePages );    // Get the page, either from cache or the website.
-        const bookURLs = extractBookLinks( html, currentPageURL);                       // Find all books on this catalogue page.
+    const records = [];
 
-        console.log( `Found ${bookURLs.length} book links on page ${cataloguePages}`);  // Log amount of book links found on this page.
-        discoveredURLs.push(...bookURLs);
-        const nextPageURL = findNextPage( html, currentPageURL );                       // Find the site's own "next" link.
-
-        if (!nextPageURL) { break; }                                                    // No more pages to crawl.
-
-        currentPageURL = nextPageURL;
-
-        // Only wait when we actually made a network request.
-        if (!fromCache && cataloguePages < MAX_CATALOGUE_PAGES) {
-            await sleep(REQUEST_DELAY);
-        }
+    for (let i = 0; i < books.length; i++) {
+        const book = books[i];
+        const record = await fetchBookRecord(book.productUrl, book.sourcePage);
+        records.push(record);
     }
 
-    // Remove duplicate URLs.
-    const uniqueURLs = [ ...new Set(discoveredURLs) ];
+    console.log(`\ndetail_pages=${records.length}`);
 
-    console.log("\n--------------------------------");
-    console.log(`catalogue_pages=${cataloguePages}`);
-    console.log(`discovered=${discoveredURLs.length}`);
-    console.log(`unique_URLs=${uniqueURLs.length}`);
-    console.log("--------------------------------");
+    if (records.length > 0) {
+        console.log(JSON.stringify(records[0], null, 2));
+    }
 }
 
 main().catch((error) => {
-    console.error("Crawler failed:", error.message);
+    console.error("Scraper failed:", error.message);
     process.exit(1);
 });
