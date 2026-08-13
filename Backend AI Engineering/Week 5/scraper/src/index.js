@@ -9,9 +9,20 @@ const USER_AGENT = "FlyRankInternship-A9/1.0 (+https://github.com/sana-munir-ala
 const OUTPUT_DIR = path.join(__dirname, "..", "output");
 const BOOKS_FILE = path.join( OUTPUT_DIR, "books.json" );
 const ERRORS_FILE = path.join( OUTPUT_DIR, "errors.json" );
+const RUN_REPORT_FILE = path.join( OUTPUT_DIR, "run-report.json" );
 const REQUEST_DELAY = 500;
-const REQUEST_TIMEOUT = 5000;
+const REQUEST_TIMEOUT = 5000; // Max wait per request, in ms, before giving up (see Stage 5: retry rules)
 const MAX_CATALOGUE_PAGES = 3;
+
+class FetchError extends Error {
+    constructor(message, options = {}) {
+        super(message);
+        this.name = "FetchError";
+        this.status = options.status ?? null;
+        this.retryable = options.retryable ?? false;
+        this.url = options.url ?? null;
+    }
+}
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,24 +38,39 @@ async function getPage(url, cacheFile) {
         if (error.code !== "ENOENT") throw error;
     }
 
-    console.log(`FETCH ${url}`);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-    const fetchedAt = new Date().toISOString();
+    let lastError = null;
 
-    try {
-        const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
-        if (response.status !== 200) throw new Error(`Request failed with status ${response.status}`);
-        const html = await response.text();
-        await fs.mkdir(path.dirname(cacheFile), { recursive: true });
-        await fs.writeFile(cacheFile, html, "utf8");
-        return { html, fromCache: false, fetchedAt };
-    } catch (error) {
-        if (error.name === "AbortError") throw new Error(`Request timed out after ${REQUEST_TIMEOUT}ms: ${url}`);
-        throw error;
-    } finally {
-        clearTimeout(timeoutId);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        console.log(`FETCH ${url} (attempt ${attempt})`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+        const fetchedAt = new Date().toISOString();
+
+        try {
+            const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
+            if (response.status !== 200) {
+                const retryable = response.status >= 500 && response.status <= 599;
+                throw new FetchError(`Request failed with status ${response.status}`, { status: response.status, retryable, url });
+            }
+            const html = await response.text();
+            await fs.mkdir(path.dirname(cacheFile), { recursive: true });
+            await fs.writeFile(cacheFile, html, "utf8");
+            return { html, fromCache: false, fetchedAt };
+        } catch (error) {
+            if (error.name === "AbortError") {
+                lastError = new FetchError(`Request timed out after ${REQUEST_TIMEOUT}ms`, {retryable: true, url});
+            } else {
+                lastError = error;
+            }
+            const shouldRetry = lastError.retryable === true && attempt === 1;
+            if (!shouldRetry) { throw lastError; }
+            console.log( `Retrying ${url} after failure...` );
+            await sleep(REQUEST_DELAY);
+        } finally {
+            clearTimeout(timeoutId);
+        }
     }
+    throw lastError;
 }
 
 function cacheFileForUrl(url) {
@@ -72,7 +98,7 @@ function findNextPage(html, pageUrl) {
     return new URL(nextHref, pageUrl).href;
 }
 
-async function discoverBooks() {
+async function discoverBooks(stats) {
     let currentPageUrl = START_URL;
     const discoveredBooks = [];
     let cataloguePages = 0;
@@ -83,8 +109,13 @@ async function discoverBooks() {
         console.log(`\nProcessing catalogue page ${cataloguePages}`);
 
         const { html, fromCache } = await getPage(currentPageUrl, catalogueCacheFile);
-        const bookUrls = extractBookLinks(html, currentPageUrl);
+        if (fromCache) {
+            stats.cacheHits++;
+        } else {
+            stats.pagesFetched++;
+        }
 
+        const bookUrls = extractBookLinks(html, currentPageUrl);
         console.log(`Found ${bookUrls.length} book links`);
 
         for (const productUrl of bookUrls) {
@@ -92,10 +123,9 @@ async function discoverBooks() {
         }
 
         const nextPageUrl = findNextPage(html, currentPageUrl);
+        
         if (!nextPageUrl) break;
-
         currentPageUrl = nextPageUrl;
-
         if (!fromCache && cataloguePages < MAX_CATALOGUE_PAGES) await sleep(REQUEST_DELAY);
     }
 
@@ -123,10 +153,15 @@ function extractBookRecord(html, productUrl, sourcePage, fetchedAt) {
     return { title, product_url: productUrl, price_text: priceText, availability_text: availabilityText, rating_text: ratingText, description, source_page: sourcePage, fetched_at: fetchedAt };
 }
 
-async function fetchBookRecord(productUrl, sourcePage) {
+async function fetchBookRecord(productUrl, sourcePage, stats) {
     const cacheFile = cacheFileForUrl(productUrl);
     const { html, fromCache, fetchedAt } = await getPage(productUrl, cacheFile);
-    if (!fromCache) await sleep(REQUEST_DELAY); // only delay on real network hits
+    if (fromCache) {
+        stats.cacheHits++;
+    } else {
+        stats.pagesFetched++;
+        await sleep(REQUEST_DELAY);
+    }
     return extractBookRecord(html, productUrl, sourcePage, fetchedAt);
 }
 
@@ -142,30 +177,56 @@ function normalizeRecord(rawRecord) {
 }
 
 async function main() {
+    const runStartedAt = new Date();
+    const startTime = Date.now();
+    const stats = { pagesFetched: 0, cacheHits: 0 };
+
     await fs.mkdir(CACHE_DIR, { recursive: true });
     await fs.mkdir(OUTPUT_DIR, { recursive: true });            // Create the output directory if it doesn't exist
 
-    const { books, cataloguePages } = await discoverBooks();
+    const { books, cataloguePages } = await discoverBooks(stats);
 
     console.log(`\ncatalogue_pages=${cataloguePages}`);
     console.log(`discovered=${books.length}`);
     console.log(`unique_urls=${books.length}`);
 
+    /* 
+        Uncomment the block below to intentionally add one invalid URL to the
+        book list. Used to verify the scraper survives a failed page instead
+        of crashing (see Stage 5 checkpoint) — the run should still finish,
+        books.json should still contain all real records, and run-report.json
+        should show failed_pages: 1.
+    */
+    // books.push({
+    //     productUrl: "https://books.toscrape.com/catalogue/fake-book-for-stage-5-test/index.html",
+    //     sourcePage: START_URL
+    // });
+
     const validRecords = [];
     const errors = [];
+    const failedPages = [];
 
     for (let i = 0; i < books.length; i++) {
         const book = books[i];
-        const rawRecord = await fetchBookRecord(book.productUrl, book.sourcePage);
-        const normalizedRecord = normalizeRecord(rawRecord);
-        const result = BookSchema.safeParse(normalizedRecord);
-
-        if (result.success) {
-            validRecords.push(result.data);
-        } else {
-            errors.push({
-                product_url: rawRecord.product_url,
-                reason: result.error.issues
+        try {
+            const rawRecord = await fetchBookRecord(book.productUrl, book.sourcePage, stats);
+            const normalizedRecord = normalizeRecord(rawRecord);
+            const result = BookSchema.safeParse(normalizedRecord);
+            if (result.success) {
+                validRecords.push(result.data);
+            } else {
+                errors.push({
+                    product_url: rawRecord.product_url,
+                    reason: result.error.issues
+                });
+            }
+        } catch (error) {
+            console.error(`FAILED ${book.productUrl}: ${error.message}`);
+            failedPages.push({
+                product_url: book.productUrl,
+                source_page: book.sourcePage,
+                error: error.message,
+                status: error.status ?? null
             });
         }
     }
@@ -173,11 +234,26 @@ async function main() {
     console.log(`\ndetail_pages=${books.length}`);
     console.log(`valid_records=${validRecords.length}`);
     console.log(`errors=${errors.length}`);
+    console.log(`failed_pages=${failedPages.length}`);
 
     await fs.writeFile( BOOKS_FILE, JSON.stringify( validRecords, null, 2 ), "utf8" );
     await fs.writeFile( ERRORS_FILE, JSON.stringify( errors, null, 2 ), "utf8" );
+
+    const durationMs = Date.now() - startTime;
+    const runReport = {
+        start_time: runStartedAt.toISOString(),
+        duration_ms: durationMs,
+        pages_fetched: stats.pagesFetched,
+        cache_hits: stats.cacheHits,
+        valid_records:  validRecords.length,
+        invalid_records: errors.length,
+        failed_pages: failedPages.length
+    };
+
+    await fs.writeFile( RUN_REPORT_FILE, JSON.stringify( runReport, null, 2 ), "utf8");
     console.log(`\nWrote ${BOOKS_FILE}`);
     console.log(`Wrote ${ERRORS_FILE}`);
+    console.log(`Wrote ${RUN_REPORT_FILE}`);
 }
 
 main().catch((error) => {
