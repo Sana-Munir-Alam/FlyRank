@@ -1,10 +1,14 @@
 const fs = require("fs/promises");
 const path = require("path");
 const cheerio = require("cheerio");
+const { BookSchema } = require("./schema");
 
 const START_URL = "https://books.toscrape.com/catalogue/page-1.html";
 const CACHE_DIR = path.join(__dirname, "..", "cache");
 const USER_AGENT = "FlyRankInternship-A9/1.0 (+https://github.com/sana-munir-alam/flyrank)";
+const OUTPUT_DIR = path.join(__dirname, "..", "output");
+const BOOKS_FILE = path.join( OUTPUT_DIR, "books.json" );
+const ERRORS_FILE = path.join( OUTPUT_DIR, "errors.json" );
 const REQUEST_DELAY = 500;
 const REQUEST_TIMEOUT = 5000;
 const MAX_CATALOGUE_PAGES = 3;
@@ -126,8 +130,20 @@ async function fetchBookRecord(productUrl, sourcePage) {
     return extractBookRecord(html, productUrl, sourcePage, fetchedAt);
 }
 
+function normalizePrice(priceText) {
+    if (!priceText) { return null; }
+    const cleaned = priceText.replace("£", "").trim();  // Remove the pound sign and any leading/trailing whitespace
+    const price = Number(cleaned);                  // Convert the cleaned string to a number
+    return Number.isFinite(price) ? price : null;   // Returns null if the conversion fails
+}
+
+function normalizeRecord(rawRecord) {
+    return { ...rawRecord, price_gbp: normalizePrice(rawRecord.price_text) };
+}
+
 async function main() {
     await fs.mkdir(CACHE_DIR, { recursive: true });
+    await fs.mkdir(OUTPUT_DIR, { recursive: true });            // Create the output directory if it doesn't exist
 
     const { books, cataloguePages } = await discoverBooks();
 
@@ -135,19 +151,33 @@ async function main() {
     console.log(`discovered=${books.length}`);
     console.log(`unique_urls=${books.length}`);
 
-    const records = [];
+    const validRecords = [];
+    const errors = [];
 
     for (let i = 0; i < books.length; i++) {
         const book = books[i];
-        const record = await fetchBookRecord(book.productUrl, book.sourcePage);
-        records.push(record);
-    }
+        const rawRecord = await fetchBookRecord(book.productUrl, book.sourcePage);
+        const normalizedRecord = normalizeRecord(rawRecord);
+        const result = BookSchema.safeParse(normalizedRecord);
 
-    console.log(`\ndetail_pages=${records.length}`);
-
-    if (records.length > 0) {
-        console.log(JSON.stringify(records[0], null, 2));
+        if (result.success) {
+            validRecords.push(result.data);
+        } else {
+            errors.push({
+                product_url: rawRecord.product_url,
+                reason: result.error.issues
+            });
+        }
     }
+    
+    console.log(`\ndetail_pages=${books.length}`);
+    console.log(`valid_records=${validRecords.length}`);
+    console.log(`errors=${errors.length}`);
+
+    await fs.writeFile( BOOKS_FILE, JSON.stringify( validRecords, null, 2 ), "utf8" );
+    await fs.writeFile( ERRORS_FILE, JSON.stringify( errors, null, 2 ), "utf8" );
+    console.log(`\nWrote ${BOOKS_FILE}`);
+    console.log(`Wrote ${ERRORS_FILE}`);
 }
 
 main().catch((error) => {
