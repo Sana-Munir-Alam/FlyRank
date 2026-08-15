@@ -2,6 +2,10 @@ const fs = require("fs/promises");
 const path = require("path");
 const cheerio = require("cheerio");
 const { BookSchema } = require("./schema");
+const { recordsToCsv } = require("./csv");
+const { compareRecords } = require("./change-detection");
+const { generateDashboard } = require("./dashboard");
+const { extractBookRecord } = require("./parser");
 
 const START_URL = "https://books.toscrape.com/catalogue/page-1.html";
 const CACHE_DIR = path.join(__dirname, "..", "cache");
@@ -10,9 +14,15 @@ const OUTPUT_DIR = path.join(__dirname, "..", "output");
 const BOOKS_FILE = path.join( OUTPUT_DIR, "books.json" );
 const ERRORS_FILE = path.join( OUTPUT_DIR, "errors.json" );
 const RUN_REPORT_FILE = path.join( OUTPUT_DIR, "run-report.json" );
+const CSV_FILE = path.join(OUTPUT_DIR, "books.csv");
+
 const REQUEST_DELAY = 500;
 const REQUEST_TIMEOUT = 5000; // Max wait per request, in ms, before giving up (see Stage 5: retry rules)
 const MAX_CATALOGUE_PAGES = 3;
+
+const MAX_RETRIES = 2;
+const BASE_RETRY_DELAY = 500;
+const REQUEST_LOG_FILE = path.join(OUTPUT_DIR, "request-log.jsonl");
 
 class FetchError extends Error {
     constructor(message, options = {}) {
@@ -21,11 +31,36 @@ class FetchError extends Error {
         this.status = options.status ?? null;
         this.retryable = options.retryable ?? false;
         this.url = options.url ?? null;
+        this.retryAfterHeader = options.retryAfterHeader ?? null;
     }
 }
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function calculateRetryDelay(attempt, retryAfterHeader) {
+    if (retryAfterHeader) {
+        const retryAfterSeconds = Number(retryAfterHeader);
+        if (Number.isFinite(retryAfterSeconds)) {
+            return retryAfterSeconds * 1000;
+        }
+        const retryAfterDate = Date.parse(retryAfterHeader);
+        if (!Number.isNaN(retryAfterDate)) {
+            return Math.max(0, retryAfterDate - Date.now());
+        }
+    }
+    const exponentialDelay = BASE_RETRY_DELAY * Math.pow(2, attempt - 1);
+    const jitter = Math.random() * 250;
+    return exponentialDelay + jitter;
+}
+
+function isRetryableStatus(status) {
+    return status >= 500 && status <= 599;
+}
+
+async function logRequest(entry) {
+    await fs.appendFile( REQUEST_LOG_FILE, JSON.stringify({ timestamp: new Date().toISOString(), ...entry, }) + "\n", "utf8" );
 }
 
 async function getPage(url, cacheFile) {
@@ -40,7 +75,7 @@ async function getPage(url, cacheFile) {
 
     let lastError = null;
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
         console.log(`FETCH ${url} (attempt ${attempt})`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -48,9 +83,10 @@ async function getPage(url, cacheFile) {
 
         try {
             const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
+            await logRequest({ url, status: response.status, attempt });
             if (response.status !== 200) {
                 const retryable = response.status >= 500 && response.status <= 599;
-                throw new FetchError(`Request failed with status ${response.status}`, { status: response.status, retryable, url });
+                throw new FetchError(`Request failed with status ${response.status}`, { status: response.status, retryable, url, retryAfterHeader: response.headers.get("retry-after") });
             }
             const html = await response.text();
             await fs.mkdir(path.dirname(cacheFile), { recursive: true });
@@ -62,10 +98,12 @@ async function getPage(url, cacheFile) {
             } else {
                 lastError = error;
             }
-            const shouldRetry = lastError.retryable === true && attempt === 1;
+            const shouldRetry = lastError.retryable === true && attempt <= MAX_RETRIES;
+
             if (!shouldRetry) { throw lastError; }
-            console.log( `Retrying ${url} after failure...` );
-            await sleep(REQUEST_DELAY);
+            const delay = calculateRetryDelay(attempt, lastError.retryAfterHeader);
+            console.log(`Retrying ${url} after ${Math.round(delay)}ms...`);
+            await sleep(delay);
         } finally {
             clearTimeout(timeoutId);
         }
@@ -141,18 +179,6 @@ async function discoverBooks(stats) {
     return { books: uniqueBooks, cataloguePages };
 }
 
-function extractBookRecord(html, productUrl, sourcePage, fetchedAt) {
-    const $ = cheerio.load(html);
-    const productArea = $("article.product_page");
-    const title = productArea.find("div.product_main h1").first().text().trim() || null;
-    const priceText = productArea.find("p.price_color").first().text().trim() || null;
-    const availabilityText = productArea.find("p.instock.availability").first().text().replace(/\s+/g, " ").trim() || null;
-    const ratingText = productArea.find("p.star-rating").first().attr("class")?.replace("star-rating", "").trim() || null;
-    const description = $("#product_description").next("p").first().text().trim() || null;
-
-    return { title, product_url: productUrl, price_text: priceText, availability_text: availabilityText, rating_text: ratingText, description, source_page: sourcePage, fetched_at: fetchedAt };
-}
-
 async function fetchBookRecord(productUrl, sourcePage, stats) {
     const cacheFile = cacheFileForUrl(productUrl);
     const { html, fromCache, fetchedAt } = await getPage(productUrl, cacheFile);
@@ -183,12 +209,23 @@ async function main() {
 
     await fs.mkdir(CACHE_DIR, { recursive: true });
     await fs.mkdir(OUTPUT_DIR, { recursive: true });            // Create the output directory if it doesn't exist
+    await fs.writeFile(REQUEST_LOG_FILE, "", "utf8");
 
     const { books, cataloguePages } = await discoverBooks(stats);
 
     console.log(`\ncatalogue_pages=${cataloguePages}`);
     console.log(`discovered=${books.length}`);
-    console.log(`unique_urls=${books.length}`);
+    console.log(`unique_urls=${books.length}\n`);
+
+    // Read the previous books.json BEFORE overwriting it.
+    let previousRecords = [];
+
+    try {
+        const previousJson = await fs.readFile(BOOKS_FILE, "utf8");
+        previousRecords = JSON.parse(previousJson);
+    } catch (error) {
+        if (error.code !== "ENOENT") { throw error; }
+    }
 
     /* 
         Uncomment the block below to intentionally add one invalid URL to the
@@ -230,7 +267,14 @@ async function main() {
             });
         }
     }
-    
+    const changeSummary = compareRecords(previousRecords, validRecords);
+
+    console.log(`\nChange detection:`);
+    console.log(`new=${changeSummary.new}`);
+    console.log(`changed=${changeSummary.changed}`);
+    console.log(`unchanged=${changeSummary.unchanged}`);
+    console.log(`gone=${changeSummary.gone}`);
+
     console.log(`\ndetail_pages=${books.length}`);
     console.log(`valid_records=${validRecords.length}`);
     console.log(`errors=${errors.length}`);
@@ -238,6 +282,8 @@ async function main() {
 
     await fs.writeFile( BOOKS_FILE, JSON.stringify( validRecords, null, 2 ), "utf8" );
     await fs.writeFile( ERRORS_FILE, JSON.stringify( errors, null, 2 ), "utf8" );
+    const csv = recordsToCsv(validRecords);
+    await fs.writeFile(CSV_FILE, csv, "utf8");
 
     const durationMs = Date.now() - startTime;
     const runReport = {
@@ -247,12 +293,21 @@ async function main() {
         cache_hits: stats.cacheHits,
         valid_records:  validRecords.length,
         invalid_records: errors.length,
-        failed_pages: failedPages.length
+        failed_pages: failedPages.length,
+        changes: {
+            new: changeSummary.new,
+            changed: changeSummary.changed,
+            unchanged: changeSummary.unchanged,
+            gone: changeSummary.gone
+        }
     };
 
     await fs.writeFile( RUN_REPORT_FILE, JSON.stringify( runReport, null, 2 ), "utf8");
+    const dashboardHtml = generateDashboard(validRecords, runReport);
+    await fs.writeFile( path.join(OUTPUT_DIR, "dashboard.html"), dashboardHtml, "utf8");
     console.log(`\nWrote ${BOOKS_FILE}`);
     console.log(`Wrote ${ERRORS_FILE}`);
+    console.log(`Wrote ${CSV_FILE}`);
     console.log(`Wrote ${RUN_REPORT_FILE}`);
 }
 

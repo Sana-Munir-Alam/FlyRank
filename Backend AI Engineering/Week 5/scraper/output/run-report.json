@@ -1,9 +1,15 @@
 {
-  "start_time": "2026-08-13T17:27:25.036Z",
-  "duration_ms": 1566,
-  "pages_fetched": 1,
-  "cache_hits": 62,
+  "start_time": "2026-08-14T17:30:53.071Z",
+  "duration_ms": 43736,
+  "pages_fetched": 60,
+  "cache_hits": 3,
   "valid_records": 60,
   "invalid_records": 0,
-  "failed_pages": 0
+  "failed_pages": 0,
+  "changes": {
+    "new": 1,
+    "changed": 0,
+    "unchanged": 59,
+    "gone": 0
+  }
 }

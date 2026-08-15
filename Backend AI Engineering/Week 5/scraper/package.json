@@ -4,7 +4,8 @@
   "description": "A JavaScript web scraper built for practicing responsible and controlled web scraping using the Books to Scrape sandbox.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/index.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
