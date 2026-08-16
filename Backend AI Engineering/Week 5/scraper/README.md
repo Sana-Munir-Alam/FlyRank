@@ -6,7 +6,7 @@ A JavaScript web scraper built for practicing responsible and controlled web scr
 
 ```bash
 git clone https://github.com/sana-munir-alam/flyrank.git
-cd flyrank/scraper
+cd "Backend AI Engineering/Week 5/scraper"
 npm install
 node src/index.js
 ```
