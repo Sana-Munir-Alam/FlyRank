@@ -1,0 +1,305 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Task API", "version": "1.0", "description": "A simple CRUD API for managing tasks stored in memory." },
+  "servers": [{ "url": "http://localhost:3000" }],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "API information",
+        "responses": {
+          "200": {
+            "description": "API details",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "example": "Task API" },
+                "version": { "type": "string", "example": "1.0" },
+                "endpoints": { "type": "array", "items": { "type": "string" }, "example": [ "/tasks", "/stats", "/reset", "/health"] }
+              }
+            } } }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Server is running",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": { "status": { "type": "string", "example": "ok" } }
+            } } }
+          }
+        }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "summary": "Get all tasks or filter them",
+         "parameters": [
+          {
+            "name": "done",
+            "in": "query",
+            "required": false,
+            "description": "Filter tasks by completion status.",
+            "schema": { "type": "string",  "enum": ["true", "false"] }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Search tasks by title.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tasks",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error"}}}
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new task",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "title": { "type": "string", "example": "Complete assignment" } },
+            "required": ["title"]
+          } } }
+        },
+        "responses": {
+          "201": { "description": "Task created successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "400": { "description": "Invalid task data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "summary": "Get task by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Task found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "404": { "description": "Task not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "put": {
+        "summary": "Update a task",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string", "example": "Finish Express project" },
+              "done": { "type": "boolean", "example": true }
+            }
+          } } }
+        },
+        "responses": {
+          "200": { "description": "Task updated successfully", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } },
+          "400": { "description": "Invalid task data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "Task not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "summary": "Delete a task",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "Task deleted successfully" },
+          "404": { "description": "Task not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "summary": "Get task statistics",
+        "responses": {
+          "200": { 
+            "description": "Task statistics", 
+            "content": {"application/json": {"schema": { "$ref": "#/components/schemas/Stats" }}}
+          }
+        }
+      }
+    },
+    "/reset": {
+      "post": {
+        "summary": "Reset the task list",
+        "responses": {
+          "200": {
+            "description": "Tasks reset successfully",
+            "content": {"application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": { "type": "string", "example": "Tasks have been reset." },
+                  "tasks": { "type": "array", "items": {"$ref": "#/components/schemas/Task"}}
+                }
+              }
+            }}
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "summary": "Create a new user account",
+        "requestBody": {
+            "required": true,
+            "content": { "application/json": { "schema": {
+                "type": "object",
+                "properties": {
+                    "email": { "type": "string", "example": "test@example.com" },
+                    "password": { "type": "string", "example": "password123" }
+                },
+                "required": ["email", "password"]
+            } } }
+        },
+        "responses": {
+          "201": { "description": "User created" },
+          "400": { "description": "Missing or invalid input", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate and receive a JWT",
+        "requestBody": {
+            "required": true,
+            "content": { "application/json": { "schema": {
+                "type": "object",
+                "properties": { "email": { "type": "string", "example": "test@example.com" },  "password": { "type": "string", "example": "password123" }},
+                "required": ["email", "password"]
+            } } }
+        },
+        "responses": {
+          "200": {
+              "description": "Login successful",
+              "content": { "application/json": { "schema": {
+                  "type": "object",
+                  "properties": { "access_token": { "type": "string" }, "refresh_token": { "type": "string" }}
+              } } }
+          },
+          "400": { "description": "Missing input", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Invalid credentials", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "End the current session",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Logged out successfully" },
+          "401": { "description": "Missing, invalid, or expired token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Exchange a refresh token for a new access token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+              "type": "object", "properties": { "refresh_token": { "type": "string" } },
+              "required": ["refresh_token"]
+          } } }
+        },
+        "responses": {
+          "200": {
+            "description": "New access token issued",
+            "content": { "application/json": { "schema": {
+                "type": "object",
+                "properties": { "access_token": { "type": "string" }, "refresh_token": { "type": "string" } }
+            } } }
+          },
+          "400": { "description": "Missing refresh token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Invalid or expired refresh token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/public/info": {
+      "get": {
+        "summary": "Public, unauthenticated info",
+        "responses": {
+            "200": { "description": "Public message", "content": { "application/json": { "schema": { "type": "object",  "properties": { "message": { "type": "string" }}}}}}
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "summary": "Get the logged-in user's profile",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "id": { "type": "string" }, "email": { "type": "string" } }} } }
+          },
+          "401": { "description": "Missing, invalid, or expired token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "summary": "Get dashboard data (demonstrates middleware reuse)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Dashboard data" },
+          "401": { "description": "Missing, invalid, or expired token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/protected/admin": {
+      "get": {
+        "summary": "Admin-only route",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+            "200": { "description": "Admin access granted" },
+            "401": { "description": "Missing, invalid, or expired token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+            "403": { "description": "Authenticated but not an admin", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Task": {
+        "type": "object",
+        "required": ["id", "title", "done"],
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "title": { "type": "string", "example": "Learn Express" },
+          "done": { "type": "boolean", "example": false }
+        }
+      },
+      "Stats": {
+        "type": "object",
+        "required": ["total", "done", "open"],
+        "properties": {
+          "total": { "type": "integer", "example": 3 },
+          "done": { "type": "integer", "example": 1 },
+          "open": { "type": "integer", "example": 2 }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": { "error": { "type": "string", "example": "Task not found" } }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
