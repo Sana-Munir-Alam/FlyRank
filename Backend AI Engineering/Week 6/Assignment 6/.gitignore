@@ -15,3 +15,9 @@ npm-debug.log*
 
 # Database File
 **/tasks.db
+
+# Logs
+logs/*.jsonl
+
+# Scripts
+scripts/
