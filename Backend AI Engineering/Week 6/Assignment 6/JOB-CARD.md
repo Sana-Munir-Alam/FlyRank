@@ -18,7 +18,7 @@ Classifies a scraped book by genre and flags low-quality scrape records.
 ### Quality flag definitions
 
 - `missing_description`: description is null or empty
-- `description_too_short`: description is present but unusually short
+- `description_too_short`: description contains fewer than 10 words
 - `likely_truncated`: description appears cut off or incomplete
 
 ## Must never
