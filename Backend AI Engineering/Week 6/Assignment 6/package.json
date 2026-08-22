@@ -7,7 +7,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "eval": "node evals/run-eval.js"
   },
   "keywords": [],
   "author": "",
