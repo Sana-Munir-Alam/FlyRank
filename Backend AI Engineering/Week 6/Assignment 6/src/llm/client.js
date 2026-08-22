@@ -8,7 +8,8 @@ if (!process.env.LLM_API_KEY) {
 const llmClient = new OpenAI({
   apiKey: process.env.LLM_API_KEY,
   baseURL: process.env.LLM_BASE_URL,
-  timeout: 60_000,
+  timeout: 30000,   // 30 sec
+  maxRetries: 0,
 });
 
 const LLM_MODEL = process.env.LLM_MODEL || "gemini-3.6-flash";

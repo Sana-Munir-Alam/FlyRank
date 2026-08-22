@@ -14,6 +14,11 @@ router.post("/enrich", async (req, res) => {
             return res.status(400).json({ error: `${issue.path.join(".")}: ${issue.message}` });
         }
         const validatedInput = result.data;
+
+        // Check if LLM feature is enabled
+        if (process.env.LLM_ENABLED === "false") {
+            return res.status(503).json({ error: "LLM feature is temporarily disabled." });
+        }
         
         if (process.env.LLM_STUB === "1") {                     // If LLM_STUB is set to "1", return a stub response for  testing
             const stub = {
@@ -32,6 +37,9 @@ router.post("/enrich", async (req, res) => {
 
     } catch (error) {
         console.error("Enrichment error:", error);
+        if (error.name === "APIConnectionTimeoutError") {
+            return res.status(504).json({ error: "The model took too long to respond." });
+        }
         return res.status(500).json({ error: "Internal server error" });
     }
 });

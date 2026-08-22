@@ -6,6 +6,25 @@ const { llmClient, LLM_MODEL } = require("./client");
 const PROMPT_VERSION = "enrich-v1";
 const SYSTEM_PROMPT = fs.readFileSync( path.join(__dirname, "../../prompts/enrich-v1.md"), "utf8" );
 const QUARANTINE_PATH = path.join(__dirname, "../../logs/quarantine.jsonl");
+const LLM_CALLS_PATH = path.join(__dirname, "../../logs/llm-calls.jsonl");
+
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const MAX_ATTEMPTS = 3;
+const BASE_DELAY_MS = 1000;
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+function isRetryable(err) {
+  if (err.status && RETRYABLE_STATUS.has(err.status)) return true;
+  if (err.name === "APIConnectionTimeoutError") return true;
+  return false; // 400/401/403 fall through here never retried
+}
+
+function getRetryAfterMs(err) {
+  const header = err.headers?.get?.("retry-after");
+  const seconds = Number(header);
+  return Number.isFinite(seconds) ? seconds * 1000 : null;
+}
 
 function extractJson(text) {
   const stripped = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
@@ -20,13 +39,42 @@ function logQuarantine(entry) {
   fs.appendFileSync(QUARANTINE_PATH, JSON.stringify(entry) + "\n");
 }
 
-async function callModel(messages) {
-  const completion = await llmClient.chat.completions.create({
-    model: LLM_MODEL,
-    temperature: 0.2,
-    messages,
-  });
-  return completion.choices[0].message.content;
+function logCall(entry) {
+  const line = JSON.stringify(entry);
+  console.log(line);
+  fs.mkdirSync(path.dirname(LLM_CALLS_PATH), { recursive: true });
+  fs.appendFileSync(LLM_CALLS_PATH, line + "\n");
+}
+
+async function callModel(messages, { repairNeeded = false } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const startedAt = Date.now();
+    try {
+      const completion = await llmClient.chat.completions.create({
+        model: LLM_MODEL, temperature: 0.2, messages,
+      });
+      logCall({
+        event: "llm_call", promptVersion: PROMPT_VERSION, model: LLM_MODEL,
+        inputTokens: completion.usage?.prompt_tokens ?? null,
+        outputTokens: completion.usage?.completion_tokens ?? null,
+        durationMs: Date.now() - startedAt, repairNeeded, attempt,
+      });
+      return completion.choices[0].message.content;
+    } catch (err) {
+      lastError = err;
+      const retryable = isRetryable(err);
+      logCall({
+        event: "llm_call_failed", promptVersion: PROMPT_VERSION, model: LLM_MODEL,
+        durationMs: Date.now() - startedAt,
+        attempt, status: err.status ?? null, retryable, repairNeeded,
+      });
+      if (!retryable || attempt === MAX_ATTEMPTS) throw err;
+      const backoff = getRetryAfterMs(err) ?? (BASE_DELAY_MS * 2 ** (attempt - 1) + Math.random() * 250);
+      await sleep(backoff);
+    }
+  }
+  throw lastError;
 }
 
 async function enrich(input) {
@@ -35,7 +83,7 @@ async function enrich(input) {
     { role: "user", content: JSON.stringify(input) },
   ];
 
-  const firstRaw = await callModel(baseMessages);
+  const firstRaw = await callModel(baseMessages, {repairNeeded: false});
   const firstAttempt = tryParseAndValidate(firstRaw);
   if (firstAttempt.ok) return firstAttempt;
 
@@ -45,7 +93,7 @@ async function enrich(input) {
     { role: "assistant", content: firstRaw },
     { role: "user", content: `Your previous answer was rejected for this reason: ${firstAttempt.error}. Return only corrected JSON matching the schema.` },
   ];
-  const secondRaw = await callModel(repairMessages);
+  const secondRaw = await callModel(repairMessages, { repairNeeded: true });
   const secondAttempt = tryParseAndValidate(secondRaw);
   if (secondAttempt.ok) return secondAttempt;
 
