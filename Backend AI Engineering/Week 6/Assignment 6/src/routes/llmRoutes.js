@@ -4,9 +4,7 @@ const router = express.Router();
 const fs = require("fs");
 const path = require("path");
 const { EnrichInputSchema, EnrichOutputSchema } = require("../llm/enrichSchema");
-const { llmClient, LLM_MODEL } = require("../llm/client");
-
-const SYSTEM_PROMPT = fs.readFileSync( path.join(__dirname, "../../prompts/enrich-v1.md"), "utf8" );
+const { enrich } = require("../llm/enrichParser");
 
 router.post("/enrich", async (req, res) => {
     try {
@@ -26,18 +24,11 @@ router.post("/enrich", async (req, res) => {
             return res.status(200).json(EnrichOutputSchema.parse(stub)); // Validate the stub response against the Schema
         }
 
-        // Call the LLM API with the validated input
-        const completion = await llmClient.chat.completions.create({
-        model: LLM_MODEL,
-        temperature: 0.2,
-        messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: JSON.stringify(validatedInput) },
-        ],
-        });
-
-        const raw = completion.choices[0].message.content;
-        return res.status(200).json({ raw });
+        const enrichResult = await enrich(validatedInput);
+        if (!enrichResult.ok) {
+            return res.status(422).json({ error: "Model could not produce a valid answer after one repair attempt." });
+        }
+        return res.status(200).json(enrichResult.data);
 
     } catch (error) {
         console.error("Enrichment error:", error);
