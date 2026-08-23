@@ -64,6 +64,24 @@ export async function POST(request: Request) {
         return NextResponse.json({error: "Workflow contains duplicate node IDs.",}, { status: 400 });
     }
 
+    const incomingEdges = new Set<string>();
+    for (const edge of body.edges) {
+        if (incomingEdges.has(edge.target)) {
+            return NextResponse.json( { error: `Node ${edge.target} has more than one incoming edge.`, }, { status: 400 } );
+        }
+        incomingEdges.add(edge.target);
+    }
+
+    const rootNodes = body.nodes.filter( (node) => !incomingEdges.has(node.id));
+
+    if (rootNodes.length !== 1) {
+        return NextResponse.json({ error: `Workflow must have exactly one start node, but found ${rootNodes.length}.`, }, { status: 400 });
+    }
+
+    if (rootNodes[0].id !== body.startNodeId) {
+        return NextResponse.json({ error: `startNodeId must be the workflow's only root node.`, }, { status: 400 });
+    }
+
     for (const edge of body.edges) {
         if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
             return NextResponse.json({ error: `Edge ${edge.id} references a node that does not exist.`, }, { status: 400 });

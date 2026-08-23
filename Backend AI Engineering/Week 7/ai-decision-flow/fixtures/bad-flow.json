@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "nodes": [
+    { "id": "node-1", "data": { "prompt": "Is this valid JSON?" } }
+    { "id": "node-2", "data": { "prompt": "Missing a comma above." } }
+  ],
+  "edges": []
+}
