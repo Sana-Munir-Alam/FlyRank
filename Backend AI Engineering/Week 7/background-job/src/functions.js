@@ -17,13 +17,26 @@ const sayHello = inngest.createFunction(
 const makeReport = inngest.createFunction(
     {
         id: "make-report",
-        triggers: [{ event: "report/requested" }]
+        retries: 2,
+        triggers: [{ event: "report/requested" }],
+        onFailure: async ({ event, step }) => {
+            const originalEvent = event.data.event;
+            const { id, topic } = originalEvent.data;
+            await step.run("mark-report-failed", async () => {
+                reports.set(id, {id, topic, status: "failed"});
+            });
+        }
     },
     async ({ event, step }) => {
         await step.sleep("do-the-slow-work", "8s");     // Background Sleep of 8 seconds to simulate slow work
 
         return await step.run("build-report", async () => {
             const { id, topic } = event.data;
+
+            if (topic === "fail") {  // This gives us a controlled failure that we can observe.
+                throw new Error("The report oven is broken!");
+            }
+
             const result = `Report generated for topic: ${topic}`;
             reports.set(id, {id, topic, status: "done", result});
             return result;
