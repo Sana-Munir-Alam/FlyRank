@@ -12,3 +12,7 @@ node_modules/
 dist/
 build/
 npm-debug.log*
+
+# Background job outbox
+outbox/*
+!outbox/.gitkeep

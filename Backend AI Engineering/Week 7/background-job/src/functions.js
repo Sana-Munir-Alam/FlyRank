@@ -1,5 +1,7 @@
 const { inngest } = require("./inngest");
 const { reports } = require("./reports");
+const fs = require("fs").promises;
+const path = require("path");
 
 // Create a background function that will run when the "test/hello" event is sent to Inngest
 const sayHello = inngest.createFunction(
@@ -18,6 +20,8 @@ const makeReport = inngest.createFunction(
     {
         id: "make-report",
         retries: 2,
+        concurrency: {limit: 2},
+        idempotency: "event.data.id",
         triggers: [{ event: "report/requested" }],
         onFailure: async ({ event, step }) => {
             const originalEvent = event.data.event;
@@ -28,17 +32,25 @@ const makeReport = inngest.createFunction(
         }
     },
     async ({ event, step }) => {
-        await step.sleep("do-the-slow-work", "8s");     // Background Sleep of 8 seconds to simulate slow work
+        await step.sleep("do-the-slow-work", "8s");     // For Concurrency test and to see Queue on Inngest Dashboard comment this line out
 
         return await step.run("build-report", async () => {
+            // await new Promise(resolve => setTimeout(resolve, 8000)); // For Concurrency test UNCOMMENT this line out
             const { id, topic } = event.data;
-
+            const existingReport = reports.get(id);
+            if (existingReport?.status === "done") {
+                return existingReport.result;
+            }
             if (topic === "fail") {  // This gives us a controlled failure that we can observe.
                 throw new Error("The report oven is broken!");
             }
-
             const result = `Report generated for topic: ${topic}`;
             reports.set(id, {id, topic, status: "done", result});
+            
+            // Write the report to the outbox directory
+            const outboxPath = path.join(__dirname, "..", "outbox", `${id}.txt`);
+            await fs.writeFile(outboxPath, `Report ready\n\nTopic: ${topic}\n\n${result}\n`);
+            
             return result;
         });
     }

@@ -35,6 +35,11 @@ app.post("/reports", async (req, res) => {
     res.status(202).json({ id, status: "pending" });
 });
 
+// Endpoint to list all reports
+app.get("/reports", (req, res) => {
+    res.json([...reports.values()]);
+});
+
 // Endpoint to get the status of a report
 app.get("/reports/:id", (req, res) => {
     const report = reports.get(req.params.id);
