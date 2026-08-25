@@ -44,7 +44,26 @@ const makeReport = inngest.createFunction(
     }
 );
 
+// Create a background function that will run every minute to log the status of reports
+const heartbeat = inngest.createFunction(
+    {
+        id: "heartbeat",
+        triggers: [{ cron: "* * * * *" }]   // minute   hour   day   month   weekday
+    },
+    async () => {
+        let pending = 0, done = 0, failed = 0;
+        for (const report of reports.values()) {
+            if (report.status === "pending") { pending++; }
+            else if (report.status === "done") { done++; }
+            else if (report.status === "failed") { failed++;}
+        }
+        console.log(`Heartbeat: pending=${pending}, done=${done}, failed=${failed}`);
+    }
+);
+
+
 module.exports = {
     sayHello,
-    makeReport
+    makeReport,
+    heartbeat
 };

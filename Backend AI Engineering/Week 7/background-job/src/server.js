@@ -3,7 +3,7 @@ const app = express();
 const { randomUUID } = require("crypto");
 const { serve } = require("inngest/express");
 const { inngest } = require("./inngest");
-const { sayHello, makeReport } = require("./functions");
+const { sayHello, makeReport, heartbeat } = require("./functions");
 const { reports } = require("./reports");
 
 app.use(express.json());
@@ -16,7 +16,7 @@ app.get("/health", (req, res) => {
 // Import the Inngest client and background functions
 app.use("/api/inngest", serve({
     client: inngest,
-    functions: [sayHello, makeReport]
+    functions: [sayHello, makeReport, heartbeat]
  }));
 
 // Endpoint to request a report
