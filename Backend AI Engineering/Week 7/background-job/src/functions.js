@@ -15,6 +15,16 @@ const sayHello = inngest.createFunction(
     }
 );
 
+
+// Build the report and write it to the outbox
+async function buildReport(id, topic) {
+    const result = `Report generated for topic: ${topic}`;
+    reports.set(id, {id, topic, status: "done", result });
+    const outboxPath = path.join(__dirname, "..", "outbox", `${id}.txt`);
+    await fs.writeFile(outboxPath, `Report ready\n\nTopic: ${topic}\n\n${result}\n`);
+    return result;
+}
+
 // Create a background function that will run when the "report/requested" event is sent to Inngest
 const makeReport = inngest.createFunction(
     {
@@ -32,26 +42,26 @@ const makeReport = inngest.createFunction(
         }
     },
     async ({ event, step }) => {
+        const { id, topic } = event.data;
+
+        await step.run("prepare-report", async () => {
+            reports.set(id, {id, topic, status: "pending"});
+            return "Report prepared";
+        });
+
+         // Simulate a slow report generation process
         await step.sleep("do-the-slow-work", "8s");     // For Concurrency test and to see Queue on Inngest Dashboard comment this line out
 
         return await step.run("build-report", async () => {
             // await new Promise(resolve => setTimeout(resolve, 8000)); // For Concurrency test UNCOMMENT this line out
-            const { id, topic } = event.data;
             const existingReport = reports.get(id);
             if (existingReport?.status === "done") {
                 return existingReport.result;
             }
-            if (topic === "fail") {  // This gives us a controlled failure that we can observe.
+            if (topic === "fail") {
                 throw new Error("The report oven is broken!");
             }
-            const result = `Report generated for topic: ${topic}`;
-            reports.set(id, {id, topic, status: "done", result});
-            
-            // Write the report to the outbox directory
-            const outboxPath = path.join(__dirname, "..", "outbox", `${id}.txt`);
-            await fs.writeFile(outboxPath, `Report ready\n\nTopic: ${topic}\n\n${result}\n`);
-            
-            return result;
+            return await buildReport(id, topic);
         });
     }
 );

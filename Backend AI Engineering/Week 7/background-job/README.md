@@ -4,6 +4,8 @@
 
 This project demonstrates how to move slow work out of an HTTP request and into a background job. The API accepts a report request immediately with `202 Accepted`, Inngest performs the work in the background, and a status endpoint allows the client to check when the report is ready. The project also demonstrates retries, failure handling, validation, and scheduled cron jobs.
 
+Stretch goals (idempotency, concurrency limiting, and a durability/restart proof) were also completed — see [`TESTING.md`](TESTING.md) for the full evidence and screenshots.
+
 ## 2. How to run it
 
 Clone the repository and open the `background-job` folder:
@@ -34,14 +36,15 @@ Both processes must remain running simultaneously. The API is available at `http
 
 ## 3. Endpoints and functions
 
-| Name                                                                            | Type                     | What it does                                                                                                               |
-| ------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `GET /health`                                                                   | Endpoint                 | Confirms that the API is running.                                                                                          |
-| `POST /reports`                                                                 | Endpoint                 | Validates the request, creates a pending report, sends a `report/requested` event, and immediately returns `202 Accepted`. |
-| `GET /reports/:id`                                                              | Endpoint                 | Returns the current status and result of a report.                                                                         |
-| `make-report`                                                                   | Event triggered function | Processes the report in the background, simulates slow work, builds the result, and supports retries and failure handling. |
-| `heartbeat`                                                                     | Cron function            | Runs every minute and logs the number of pending, completed, and failed reports.                                           |
-| `say-hello`                                                                     | Event triggered function | Created in Stage 1 to test the Inngest connection; not part of the report pipeline.                                        |
+| Name                | Type                     | What it does                                                                                                                          |
+| ------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`       | Endpoint                 | Confirms that the API is running.                                                                                                      |
+| `POST /reports`     | Endpoint                 | Validates the request, creates a pending report, sends a `report/requested` event, and immediately returns `202 Accepted`.            |
+| `GET /reports`      | Endpoint                 | Returns all reports and their current statuses.                                                                                        |
+| `GET /reports/:id`  | Endpoint                 | Returns the current status and result of a single report; `404` if the id doesn't exist.                                              |
+| `make-report`       | Event triggered function | Runs three steps — `prepare-report` (marks pending), `do-the-slow-work` (8s sleep), `build-report` (computes result, writes to outbox, saves as done). Configured with retries, a concurrency limit, and an idempotency key. |
+| `heartbeat`         | Cron function             | Runs every minute and logs the number of pending, done, and failed reports.                                                            |
+| `say-hello`         | Event triggered function | Created in Stage 1 to test the Inngest connection; not part of the report pipeline.                                                    |
 
 ## 4. Proof: 202 then poll
 
@@ -80,6 +83,7 @@ The initial request is accepted immediately, the first poll shows `pending`, and
 ## 5. Retries and validation
 
 Invalid input should be rejected before a background job is created because retrying a request with missing required data will not fix the input; retries are intended for temporary failures during valid work.
+
 The `make-report` function uses two retries, resulting in up to three attempts. When all attempts fail, the error is allowed to finish the function rather than being caught inside the `build-report` step, and the `onFailure` handler then marks the corresponding report as `failed`. This prevents a report from being marked failed after the first attempt while retries are still available.
 
 ## 6. Cron
@@ -92,45 +96,54 @@ The heartbeat function uses `* * * * *`, which runs once every minute for testin
 
 The screenshots below provide evidence of the background jobs, retries, and scheduled functions.
 
-### Report Creation and Status Progression
+### Report creation and status progression
 ![Curl Report Creation Status Change](screenshots/Stage2.png)
 
 ### Completed report
-
 ![Completed report](screenshots/Complete-Report.png)
 
 ### Failed report with retries
-
 ![Failed report Inngest Dashboard](screenshots/Fail-Report-Stage3.png)
 
-### Failed report and Validation Test Curl
+### Failed report and validation test curl
 ![Failed report and Validation test](screenshots/Stage3_curl.png)
 
 ### Cron heartbeat
-
 ![Cron heartbeat](screenshots/cron.png)
+
 The dashboard shows the completed `make-report` execution with its steps, the failed execution with three attempts, and recurring heartbeat runs.
 
 ## 8. Notes and known limitations
 
-Report data is stored in an in memory JavaScript `Map`, so all reports are cleared when the API process restarts. This is intentional for the assignment because the focus is on background jobs, events, retries, status reporting, and cron scheduling rather than persistent database storage.
+Report data is stored in an in-memory JavaScript `Map`, so all reports are cleared when the API process restarts. This is intentional for the assignment because the focus is on background jobs, events, retries, status reporting, and cron scheduling rather than persistent database storage. One real consequence of this is visible in the durability test in `TESTING.md`: a report's `pending` record does not survive a restart, so a client polling `GET /reports/:id` during that gap would see `404` rather than `pending`, even though the underlying job survives and completes correctly.
 
-## 9. Project Structure
+## 9. Project structure
 
 ```
 background-job/
+├── README.md
+├── TESTING.md
+├── outbox
+│   └── (report .txt files, written by completed jobs)
 ├── package-lock.json
 ├── package.json
 ├── screenshots
 │   ├── Complete-Report.png
+│   ├── Durability.png
 │   ├── Fail-Report-Stage3.png
-│   ├── Stage 1.png
 │   ├── Stage2.png
 │   ├── Stage3_curl.png
-│   └── cron.png
+│   ├── concurrency.png
+│   ├── cron.png
+│   ├── idempotency.png
+│   └── outbox-and-get-reports.png
 └── src
     ├── functions.js
     ├── inngest.js
     ├── reports.js
     └── server.js
 ```
+
+## 10. Stretch goals and extras
+
+Idempotency, concurrency limiting, and a durability/restart proof were completed beyond the core assignment. Full test steps, reasoning, and screenshots are in [`TESTING.md`](TESTING.md).
