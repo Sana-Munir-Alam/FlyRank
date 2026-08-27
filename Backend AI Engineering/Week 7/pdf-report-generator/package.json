@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node src/server.js",
     "seed": "node scripts/seed.js",
-    "test-report": "node scripts/test-report.js"
+    "test-report": "node scripts/test-report.js",
+    "render-test": "node scripts/render-test.js"
   },
   "keywords": [],
   "author": "",

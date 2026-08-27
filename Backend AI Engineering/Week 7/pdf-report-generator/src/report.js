@@ -14,9 +14,12 @@ function getReportData() {
 
     // Number of books per star rating
     const booksPerRating = db.prepare(`SELECT rating, COUNT(*) AS count FROM books GROUP BY rating ORDER BY rating`).all();
+    
+    // All books for the long report table
+    const allBooks = db.prepare(`SELECT * FROM books ORDER BY id`).all();
 
-    return {totalBooks, averagePrice, topBooks, booksPerRating};
-}
+    return { totalBooks, averagePrice, topBooks, booksPerRating, allBooks};
+};
 
 module.exports = {
     getReportData
