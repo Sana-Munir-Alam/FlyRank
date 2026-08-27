@@ -16,3 +16,4 @@ npm-debug.log*
 #db
 reports/
 report.db
+my-report.pdf
