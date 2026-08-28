@@ -16,29 +16,36 @@ app.get("/health", (req, res) => {
 // POST /reports
 app.post("/reports", async (req, res) => {
     try {
+        const force = req.body?.force === true;
+
+        // If this is not a forced request, look for today's latest report.
+        if (!force) {
+            const today = new Date().toISOString().slice(0, 10);
+            const existingReport = db.prepare(`SELECT id, path, created_at FROM reports WHERE created_at LIKE ? ORDER BY id DESC LIMIT 1`).get(`${today}%`);
+            if (existingReport) {
+                return res.status(200).json({id: existingReport.id, file: `/reports/${existingReport.id}/file`});
+            }
+        }
+
+        // No report today, or force === true.
         const data = getReportData();           // Get the aggregated report data.
         const html = buildReportHtml(data);     // Convert the data into HTML.
 
-        // Insert a placeholder row first. SQLite generates the report ID for us.
+        // Insert first so SQLite generates the report ID.
         const insertResult = db.prepare(`INSERT INTO reports (path, created_at) VALUES (?, ?)`).run(null, new Date().toISOString());
         const reportId = Number(insertResult.lastInsertRowid);
 
-        // Build the PDF path using the generated ID.
         const relativePath = path.join("reports", `${reportId}.pdf`);
         const absolutePath = path.join(__dirname, "..", relativePath);
-
-        // Render the PDF.
+        
         await renderPdf(html, absolutePath);
 
-        // Save the PDF path in the database.
-        db.prepare(`UPDATE reports SET path = ? WHERE id = ? `).run(relativePath, reportId);
-
-        // Return the report ID and file link.
-        res.status(201).json({id: reportId, file: `/reports/${reportId}/file`});
+        db.prepare(`UPDATE reports SET path = ? WHERE id = ?`).run(relativePath, reportId);
+        return res.status(201).json({id: reportId, file: `/reports/${reportId}/file`});
 
     } catch (error) {
-        console.error("Report generation failed:", error);
-        res.status(500).json({error: "Failed to generate report"});
+        console.error("Report generation failed:",error);
+        return res.status(500).json({error: "Failed to generate report"});
     }
 });
 
