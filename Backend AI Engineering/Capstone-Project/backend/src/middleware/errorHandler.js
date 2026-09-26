@@ -1,8 +1,9 @@
 function errorHandler(err, req, res, next) {
   console.error(err);
+  const statusCode = err.statusCode || 500;
 
-  res.status(503).json({
-    error: 'Service Unavailable',
+  res.status(statusCode).json({
+    error: statusCode === 500 ? 'Internal server error' : err.message,
   });
 }
 
