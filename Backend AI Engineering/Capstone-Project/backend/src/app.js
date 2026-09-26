@@ -21,7 +21,7 @@ app.use(
         pool,
         tableName: 'sessions',
     }),
-    secret: env.sessionSecret || 'development-only-secret',
+    secret: env.sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
