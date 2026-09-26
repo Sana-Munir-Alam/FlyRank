@@ -1,0 +1,30 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "src/server.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "migrate:create": "dotenv -e ../.env -- node-pg-migrate create --migrations-dir src/db/migrations",
+    "migrate:up": "dotenv -e ../.env -- node-pg-migrate up --migrations-dir src/db/migrations",
+    "migrate:down": "dotenv -e ../.env -- node-pg-migrate down --migrations-dir src/db/migrations"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.23.0",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^11.0.0",
+    "nodemon": "^3.1.14"
+  }
+}
