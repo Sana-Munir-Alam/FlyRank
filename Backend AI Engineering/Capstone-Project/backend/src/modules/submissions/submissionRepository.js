@@ -1,16 +1,6 @@
 const pool = require('../../config/database');
 
-async function create({
-  tenantId,
-  widgetId,
-  payload,
-  ipAddress,
-  userAgent,
-  origin,
-  idempotencyKey,
-  spam = false,
-  spamReason = null,
-}) {
+async function create({tenantId, widgetId, payload, ipAddress, userAgent, origin, idempotencyKey, spam = false, spamReason = null}) {
   const { rows } = await pool.query(
     `INSERT INTO submissions
        (tenant_id, widget_id, payload, ip_address, user_agent, origin, idempotency_key, spam, spam_reason)
@@ -22,19 +12,29 @@ async function create({
   );
 
   if (rows[0]) {
-    return rows[0];
+    return { submission: rows[0], isNew: true };
   }
 
-  // A row already exists for this widget + idempotency key — return that one instead of erroring, so retries are transparent to the client.
   if (idempotencyKey) {
     const existing = await pool.query(
       `SELECT * FROM submissions WHERE widget_id = $1 AND idempotency_key = $2`,
       [widgetId, idempotencyKey]
     );
-    return existing.rows[0];
+    return { submission: existing.rows[0], isNew: false };
   }
 
-  return null;
+  return { submission: null, isNew: false };
 }
 
-module.exports = { create };
+async function updateGeo(id, { countryCode, region, city, latitude, longitude, provider }) {
+  const { rows } = await pool.query(
+    `UPDATE submissions
+     SET country_code = $1, region = $2, city = $3, latitude = $4, longitude = $5, geo_provider = $6
+     WHERE id = $7
+     RETURNING *`,
+    [countryCode, region, city, latitude, longitude, provider, id]
+  );
+  return rows[0];
+}
+
+module.exports = { create, updateGeo };

@@ -20,6 +20,14 @@ const env = {
       max: Number(process.env.RATE_LIMIT_WIDGET_MAX || 20),
     },
   },
+  geo: {
+    timeoutMs: Number(process.env.GEO_PROVIDER_TIMEOUT_MS || 3000),
+    providerADisabled: process.env.GEO_PROVIDER_A_DISABLED === 'true',
+    providerBDisabled: process.env.GEO_PROVIDER_B_DISABLED === 'true',
+  },
+  jobs: {
+    pollIntervalMs: Number(process.env.JOB_POLL_INTERVAL_MS || 2000),
+  },
 };
 
 if (!env.databaseUrl) {
