@@ -1,3 +1,4 @@
+// src/app.jsx — add the submissions route
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
@@ -6,6 +7,7 @@ import { DashboardHome } from './pages/DashboardHome';
 import { WidgetsListPage } from './pages/WidgetsListPage';
 import { WidgetFormPage } from './pages/WidgetFormPage';
 import { WidgetDetailPage } from './pages/WidgetDetailPage';
+import { SubmissionsPage } from './pages/SubmissionsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { PublicOnlyRoute } from './components/PublicOnlyRoute';
 
@@ -26,7 +28,7 @@ export default function App() {
           <Route path="widgets/new" element={<WidgetFormPage />} />
           <Route path="widgets/:id" element={<WidgetDetailPage />} />
           <Route path="widgets/:id/edit" element={<WidgetFormPage />} />
-          {/* /dashboard/submissions added in Stage 12 */}
+          <Route path="submissions" element={<SubmissionsPage />} />
         </Route>
       </Route>
 
