@@ -58,4 +58,14 @@ async function remove(tenantId, id) {
   return rows[0];
 }
 
-module.exports = { create, findAll, findById, update, remove };
+async function findPublicById(id) {
+  const { rows } = await pool.query(
+    `SELECT id, name, type, config, version, active FROM widgets
+     WHERE id = $1`,
+    [id]
+  );
+
+  return rows[0];
+}
+
+module.exports = { create, findAll, findById, findPublicById, update, remove };

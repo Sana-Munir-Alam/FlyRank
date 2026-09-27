@@ -25,6 +25,7 @@ router.use(requireAuth);
 
 router.post('/', validate(createSchema), widgetController.create);
 router.get('/', widgetController.findAll);
+router.get('/:id/embed', validate(idSchema, 'params'), widgetController.getEmbed);
 router.get('/:id', validate(idSchema, 'params'), widgetController.findById);
 router.patch('/:id', validate(idSchema, 'params'), validate(updateSchema), widgetController.update);
 router.delete('/:id', validate(idSchema, 'params'), widgetController.remove);
