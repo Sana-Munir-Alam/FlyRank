@@ -9,7 +9,17 @@ const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3000),
   databaseUrl: process.env.DATABASE_URL,
-  sessionSecret: process.env.SESSION_SECRET || 'development-only-secret',
+  sessionSecret: process.env.SESSION_SECRET,
+  rateLimit: {
+    ip: {
+      windowMs: Number(process.env.RATE_LIMIT_IP_WINDOW_MS || 60000),
+      max: Number(process.env.RATE_LIMIT_IP_MAX || 100),
+    },
+    widget: {
+      windowMs: Number(process.env.RATE_LIMIT_WIDGET_WINDOW_MS || 60000),
+      max: Number(process.env.RATE_LIMIT_WIDGET_MAX || 20),
+    },
+  },
 };
 
 if (!env.databaseUrl) {
