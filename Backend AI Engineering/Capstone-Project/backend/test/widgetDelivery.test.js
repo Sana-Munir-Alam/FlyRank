@@ -25,7 +25,7 @@ test.before(async () => {
     'password123'
   );
 
-  widget = await createWidget(tenant.cookie);
+  widget = await createWidget(tenant);
 });
 
 async function request(path, options = {}) {
@@ -38,39 +38,39 @@ async function request(path, options = {}) {
   });
 }
 
+function combineCookies(response) {
+    const cookies = response.headers.getSetCookie?.() ?? [response.headers.get('set-cookie')].filter(Boolean);
+    return cookies.map((c) => c.split(';')[0]).join('; ');
+}
+
+function extractCsrfToken(cookieString) {
+    const match = cookieString.match(/csrf_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function signup(email, password) {
   const response = await request('/api/auth/signup', {
     method: 'POST',
-    body: JSON.stringify({
-      tenantName: email,
-      email,
-      password,
-    }),
+    body: JSON.stringify({ tenantName: email, email, password }),
   });
 
   assert.equal(response.status, 201);
 
-  const cookie = response.headers.get('set-cookie');
+  const cookie = combineCookies(response);
+  const csrfToken = extractCsrfToken(cookie);
   const body = await response.json();
 
-  return {
-    cookie,
-    ...body,
-  };
+  return { cookie, csrfToken, ...body };
 }
 
-async function createWidget(cookie) {
+async function createWidget(tenant) {
   const response = await request('/api/widgets', {
     method: 'POST',
-    headers: {
-      Cookie: cookie,
-    },
+    headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
     body: JSON.stringify({
       name: 'Stage 5 Widget',
       type: 'lead_capture',
-      config: {
-        title: 'Contact Us',
-      },
+      config: { title: 'Contact Us' },
     }),
   });
 
@@ -170,11 +170,11 @@ test('authenticated user receives the embed snippet', async () => {
 
 test('updating a widget changes its version but not the bundle URL', async () => {
     const response = await request(`/api/widgets/${widget.id}`,
-        {
-            method: 'PATCH',
-            headers: {Cookie: tenant.cookie,},
-            body: JSON.stringify({name: 'Updated Stage 5 Widget',}),
-        }
+      {
+        method: 'PATCH',
+        headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
+        body: JSON.stringify({ name: 'Updated Stage 5 Widget' }),
+      }
     );
 
     assert.equal(response.status, 200);

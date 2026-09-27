@@ -75,7 +75,7 @@ test.before(async () => {
 
   const runId = Date.now();
   tenant = await signup(`stage8-${runId}@test.com`, 'password123');
-  widget = await createWidget(tenant.cookie);
+  widget = await createWidget(tenant);
 });
 
 async function request(path, options = {}) {
@@ -85,21 +85,32 @@ async function request(path, options = {}) {
   });
 }
 
+function combineCookies(response) {
+  const cookies = response.headers.getSetCookie?.() ?? [response.headers.get('set-cookie')].filter(Boolean);
+  return cookies.map((c) => c.split(';')[0]).join('; ');
+}
+
+function extractCsrfToken(cookieString) {
+  const match = cookieString.match(/csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function signup(email, password) {
   const response = await request('/api/auth/signup', {
     method: 'POST',
     body: JSON.stringify({ tenantName: email, email, password }),
   });
   assert.equal(response.status, 201);
-  const cookie = response.headers.get('set-cookie');
+  const cookie = combineCookies(response);
+  const csrfToken = extractCsrfToken(cookie);
   const body = await response.json();
-  return { cookie, ...body };
+  return { cookie, csrfToken, ...body };
 }
 
-async function createWidget(cookie) {
+async function createWidget(tenant) {
   const response = await request('/api/widgets', {
     method: 'POST',
-    headers: { Cookie: cookie },
+    headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
     body: JSON.stringify({ name: 'Stage 8 Widget', type: 'lead_capture', config: {} }),
   });
   assert.equal(response.status, 201);

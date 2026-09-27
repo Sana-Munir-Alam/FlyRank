@@ -122,21 +122,32 @@ async function request(path, options = {}) {
   });
 }
 
+function combineCookies(response) {
+    const cookies = response.headers.getSetCookie?.() ?? [response.headers.get('set-cookie')].filter(Boolean);
+    return cookies.map((c) => c.split(';')[0]).join('; ');
+}
+
+function extractCsrfToken(cookieString) {
+    const match = cookieString.match(/csrf_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function signup(email, password) {
   const response = await request('/api/auth/signup', {
     method: 'POST',
     body: JSON.stringify({ tenantName: email, email, password }),
   });
   assert.equal(response.status, 201);
-  const cookie = response.headers.get('set-cookie');
+  const cookie = combineCookies(response);
+  const csrfToken = extractCsrfToken(cookie);
   const body = await response.json();
-  return { cookie, ...body };
+  return { cookie, csrfToken, ...body };
 }
 
-async function createWidget(cookie, name) {
+async function createWidget(tenant, name) {
   const response = await request('/api/widgets', {
     method: 'POST',
-    headers: { Cookie: cookie },
+    headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
     body: JSON.stringify({ name, type: 'lead_capture', config: { title: 'Contact Us' } }),
   });
   assert.equal(response.status, 201);
@@ -145,7 +156,7 @@ async function createWidget(cookie, name) {
 }
 
 test('a clean submission is stored with spam = false', async () => {
-  const widget = await createWidget(tenant.cookie, 'Honeypot Clean Widget');
+  const widget = await createWidget(tenant, 'Honeypot Clean Widget');
 
   const response = await request('/api/submissions', {
     method: 'POST',
@@ -161,7 +172,7 @@ test('a clean submission is stored with spam = false', async () => {
 });
 
 test('a filled honeypot field is flagged as spam but still returns 201', async () => {
-  const widget = await createWidget(tenant.cookie, 'Honeypot Bot Widget');
+  const widget = await createWidget(tenant, 'Honeypot Bot Widget');
 
   const response = await request('/api/submissions', {
     method: 'POST',
@@ -182,7 +193,7 @@ test('a filled honeypot field is flagged as spam but still returns 201', async (
 });
 
 test('a whitespace-only honeypot field is not treated as spam', async () => {
-  const widget = await createWidget(tenant.cookie, 'Honeypot Whitespace Widget');
+  const widget = await createWidget(tenant, 'Honeypot Whitespace Widget');
 
   const response = await request('/api/submissions', {
     method: 'POST',
@@ -201,7 +212,7 @@ test('a whitespace-only honeypot field is not treated as spam', async () => {
 });
 
 test('rate limiting is wired into the live submission endpoint', async () => {
-  const widget = await createWidget(tenant.cookie, 'Rate Limit Smoke Widget');
+  const widget = await createWidget(tenant, 'Rate Limit Smoke Widget');
 
   const attempts = Number(process.env.RATE_LIMIT_WIDGET_MAX || 20) + 10;
   const statuses = [];
@@ -218,8 +229,8 @@ test('rate limiting is wired into the live submission endpoint', async () => {
 });
 
 test('a different widget is unaffected while another widget is being rate limited', async () => {
-  const floodedWidget = await createWidget(tenant.cookie, 'Flooded Widget');
-  const quietWidget = await createWidget(tenant.cookie, 'Quiet Widget');
+  const floodedWidget = await createWidget(tenant, 'Flooded Widget');
+  const quietWidget = await createWidget(tenant, 'Quiet Widget');
 
   const attempts = Number(process.env.RATE_LIMIT_WIDGET_MAX || 20) + 10;
   for (let i = 0; i < attempts; i += 1) {

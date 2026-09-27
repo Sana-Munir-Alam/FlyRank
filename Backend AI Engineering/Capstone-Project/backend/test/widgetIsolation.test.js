@@ -26,6 +26,16 @@ async function request(path, options = {}) {
     });
 }
 
+function combineCookies(response) {
+    const cookies = response.headers.getSetCookie?.() ?? [response.headers.get('set-cookie')].filter(Boolean);
+    return cookies.map((c) => c.split(';')[0]).join('; ');
+}
+
+function extractCsrfToken(cookieString) {
+    const match = cookieString.match(/csrf_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function signup(email, password) {
     const response = await request('/api/auth/signup', {
         method: 'POST',
@@ -34,16 +44,17 @@ async function signup(email, password) {
 
     assert.equal(response.status, 201);
 
-    const cookie = response.headers.get('set-cookie');
+    const cookie = combineCookies(response);
+    const csrfToken = extractCsrfToken(cookie);
     const body = await response.json();
 
-    return { cookie, ...body };
+    return { cookie, csrfToken, ...body };
 }
 
-async function createWidget(cookie, data = {}) {
+async function createWidget(tenant, data = {}) {
     const response = await request('/api/widgets', {
         method: 'POST',
-        headers: { Cookie: cookie },
+        headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
         body: JSON.stringify({
         name: 'Test Widget',
         type: 'test',
@@ -58,7 +69,7 @@ async function createWidget(cookie, data = {}) {
 }
 
 test('tenant A can create a widget', async () => {
-    const { response, body } = await createWidget(tenantA.cookie, {
+    const { response, body } = await createWidget(tenantA, {
         name: 'Tenant A Widget',
     });
 
@@ -80,7 +91,7 @@ test('tenant A can list their widgets', async () => {
 });
 
 test('tenant B cannot read tenant A widget', async () => {
-    const { body } = await createWidget(tenantA.cookie, {
+    const { body } = await createWidget(tenantA, {
         name: 'Private Tenant A Widget',
     });
 
@@ -92,13 +103,13 @@ test('tenant B cannot read tenant A widget', async () => {
 });
 
 test('tenant B cannot edit tenant A widget', async () => {
-    const { body } = await createWidget(tenantA.cookie, {
+    const { body } = await createWidget(tenantA, {
         name: 'Protected Widget',
     });
 
     const response = await request(`/api/widgets/${body.widget.id}`, {
         method: 'PATCH',
-        headers: { Cookie: tenantB.cookie },
+        headers: { Cookie: tenantB.cookie, 'X-CSRF-Token': tenantB.csrfToken },
         body: JSON.stringify({ name: 'Hacked' }),
     });
 
@@ -106,13 +117,13 @@ test('tenant B cannot edit tenant A widget', async () => {
 });
 
 test('tenant A can edit their own widget', async () => {
-    const { body } = await createWidget(tenantA.cookie, {
+    const { body } = await createWidget(tenantA, {
         name: 'Widget Before Update',
     });
 
     const response = await request(`/api/widgets/${body.widget.id}`, {
         method: 'PATCH',
-        headers: { Cookie: tenantA.cookie },
+        headers: { Cookie: tenantA.cookie, 'X-CSRF-Token': tenantA.csrfToken },
         body: JSON.stringify({ name: 'Widget After Update' }),
     });
 
@@ -137,14 +148,34 @@ test('unauthenticated user cannot access widgets', async () => {
     assert.equal(response.status, 401);
 });
 
+test('a request missing the CSRF token is rejected with 403', async () => {
+    const response = await request('/api/widgets', {
+        method: 'POST',
+        headers: { Cookie: tenantA.cookie }, // no X-CSRF-Token
+        body: JSON.stringify({ name: 'No Token Widget', type: 'test', config: {} }),
+    });
+
+    assert.equal(response.status, 403);
+});
+
+test('a request with the wrong CSRF token is rejected with 403', async () => {
+    const response = await request('/api/widgets', {
+        method: 'POST',
+        headers: { Cookie: tenantA.cookie, 'X-CSRF-Token': 'not-the-real-token' },
+        body: JSON.stringify({ name: 'Wrong Token Widget', type: 'test', config: {} }),
+    });
+
+    assert.equal(response.status, 403);
+});
+
 test('tenant A can delete their own widget', async () => {
-    const { body } = await createWidget(tenantA.cookie, {
+    const { body } = await createWidget(tenantA, {
         name: 'Widget To Delete',
     });
 
     const deleteResponse = await request(`/api/widgets/${body.widget.id}`, {
         method: 'DELETE',
-        headers: { Cookie: tenantA.cookie },
+        headers: { Cookie: tenantA.cookie, 'X-CSRF-Token': tenantA.csrfToken },
     });
 
     assert.equal(deleteResponse.status, 204);

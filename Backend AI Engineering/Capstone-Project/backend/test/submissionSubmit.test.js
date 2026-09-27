@@ -21,7 +21,7 @@ test.before(async () => {
   const runId = Date.now();
 
   tenant = await signup(`stage6-${runId}@test.com`, 'password123');
-  widget = await createWidget(tenant.cookie);
+  widget = await createWidget(tenant);
 });
 
 async function request(path, options = {}) {
@@ -34,6 +34,16 @@ async function request(path, options = {}) {
   });
 }
 
+function combineCookies(response) {
+    const cookies = response.headers.getSetCookie?.() ?? [response.headers.get('set-cookie')].filter(Boolean);
+    return cookies.map((c) => c.split(';')[0]).join('; ');
+}
+
+function extractCsrfToken(cookieString) {
+    const match = cookieString.match(/csrf_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function signup(email, password) {
   const response = await request('/api/auth/signup', {
     method: 'POST',
@@ -42,16 +52,17 @@ async function signup(email, password) {
 
   assert.equal(response.status, 201);
 
-  const cookie = response.headers.get('set-cookie');
+  const cookie = combineCookies(response);
+  const csrfToken = extractCsrfToken(cookie);
   const body = await response.json();
 
-  return { cookie, ...body };
+  return { cookie, csrfToken, ...body };
 }
 
-async function createWidget(cookie) {
+async function createWidget(tenant) {
   const response = await request('/api/widgets', {
     method: 'POST',
-    headers: { Cookie: cookie },
+    headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
     body: JSON.stringify({
       name: 'Stage 6 Widget',
       type: 'lead_capture',
@@ -212,7 +223,7 @@ test('oversized payload returns 413, not 500', async () => {
 test('submission from an inactive widget returns 404', async () => {
   await request(`/api/widgets/${widget.id}`, {
     method: 'PATCH',
-    headers: { Cookie: tenant.cookie },
+    headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
     body: JSON.stringify({ active: false }),
   });
 
@@ -226,7 +237,7 @@ test('submission from an inactive widget returns 404', async () => {
   // reactivate so later tests / manual poking aren't affected
   await request(`/api/widgets/${widget.id}`, {
     method: 'PATCH',
-    headers: { Cookie: tenant.cookie },
+    headers: { Cookie: tenant.cookie, 'X-CSRF-Token': tenant.csrfToken },
     body: JSON.stringify({ active: true }),
   });
 });
