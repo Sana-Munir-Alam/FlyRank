@@ -1,4 +1,5 @@
 const authService = require('./authService');
+const { issueCsrfToken } = require('../../middleware/csrf');
 
 async function signup(req, res, next) {
     try {
@@ -19,13 +20,10 @@ async function signup(req, res, next) {
         });
 
        req.session.regenerate((error) => {
-            if (error) {
-                return next(error);
-            }
-
+            if (error) return next(error);
             req.session.userId = result.user.id;
             req.session.tenantId = result.user.tenant_id;
-
+            issueCsrfToken(req, res);
             return res.status(201).json({
                 user: { id: result.user.id, email: result.user.email, },
                 tenant: { id: result.tenant.id, name: result.tenant.name, },
@@ -49,13 +47,10 @@ async function login(req, res, next) {
     const user = await authService.login({ email: email.trim().toLowerCase(), password, });
 
     req.session.regenerate((error) => {
-        if (error) {
-            return next(error);
-        }
-
+        if (error) return next(error);
         req.session.userId = user.id;
         req.session.tenantId = user.tenantId;
-
+        issueCsrfToken(req, res); 
         return res.status(200).json({
             user: { id: user.id, email: user.email, },
             tenant: { id: user.tenantId, name: user.tenantName,
@@ -74,6 +69,7 @@ function logout(req, res, next) {
         }
 
         res.clearCookie('connect.sid');
+        res.clearCookie('csrf_token');    
         return res.status(200).json({ message: 'Logged out successfully', });
     });
 }

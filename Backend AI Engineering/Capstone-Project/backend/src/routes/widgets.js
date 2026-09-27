@@ -3,6 +3,7 @@ const { z } = require('zod');
 const {requireAuth} = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const widgetController = require('../modules/widgets/widgetController');
+const { requireCsrfToken } = require('../middleware/csrf');
 
 const router = express.Router();
 
@@ -22,6 +23,7 @@ const updateSchema = z.object({
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field is required' });
 
 router.use(requireAuth);
+router.use(requireCsrfToken);   // GET passes through untouched; POST/PATCH/DELETE now checked
 
 router.post('/', validate(createSchema), widgetController.create);
 router.get('/', widgetController.findAll);
