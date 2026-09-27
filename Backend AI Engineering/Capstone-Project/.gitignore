@@ -31,3 +31,5 @@ coverage/
 
 # PostgreSQL local data
 postgres-data/
+
+cookies.txt
