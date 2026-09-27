@@ -285,6 +285,7 @@ These endpoints require authentication.
 | `GET` | `/api/widgets/:id` |
 | `PATCH` | `/api/widgets/:id` |
 | `DELETE` | `/api/widgets/:id` |
+| `GET` | `/api/widgets/:id/embed` |
 
 ### Public Widget Delivery
 
