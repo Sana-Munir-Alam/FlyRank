@@ -1,4 +1,3 @@
-// src/api/widgets.js
 import { api } from './client';
 
 export const widgetsApi = {
