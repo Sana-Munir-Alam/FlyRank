@@ -60,7 +60,7 @@ async function remove(tenantId, id) {
 
 async function findPublicById(id) {
   const { rows } = await pool.query(
-    `SELECT id, name, type, config, version, active FROM widgets
+    `SELECT id, tenant_id, name, type, config, version, active FROM widgets
      WHERE id = $1`,
     [id]
   );
