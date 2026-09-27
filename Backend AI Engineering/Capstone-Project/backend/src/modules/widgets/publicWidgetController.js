@@ -10,6 +10,7 @@ async function config(req, res, next) {
     }
 
     res.set('Access-Control-Allow-Origin', '*');
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
 
     return res.status(200).json({
@@ -37,6 +38,7 @@ function bundle(req, res, next) {
   }
 
   res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
 
   return res.sendFile(bundlePath, (error) => {

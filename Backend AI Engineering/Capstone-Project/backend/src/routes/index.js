@@ -5,6 +5,7 @@ const pool = require('../config/database');
 const authRoutes = require('./auth');
 const widgets = require('./widgets');
 const publicWidgetController = require('../modules/widgets/publicWidgetController');
+const submissionsRoutes = require('./submissions');
 
 const router = express.Router();
 
@@ -46,5 +47,6 @@ router.get('/widget/v:version/widget.js', (req, res, next) => {
 
 router.use('/api/auth', authRoutes);
 router.use('/api/widgets', widgets);
+router.use('/api/submissions', submissionsRoutes);
 
 module.exports = router;
