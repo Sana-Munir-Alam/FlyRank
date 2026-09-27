@@ -33,6 +33,7 @@ async function lookupProviderA(ip) {
       provider: 'ip-api',
     };
   } catch (error) {
+    console.error('[geo] Provider A (ip-api.com) failed:', error.message);
     return null;
   }
 }
@@ -57,6 +58,7 @@ async function lookupProviderB(ip) {
       provider: 'ipapi.co',
     };
   } catch (error) {
+    console.error('[geo] Provider B (ipapi.co) failed:', error.message);
     return null;
   }
 }
