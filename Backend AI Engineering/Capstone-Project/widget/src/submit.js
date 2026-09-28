@@ -1,4 +1,13 @@
 export function wireSubmit({ form, status, submitButton, widgetId, apiOrigin }) {
+  function setStatus(message, kind) {
+    status.textContent = message;
+    status.className = 'flyrank-widget__status' + (kind ? ` flyrank-widget__status--${kind}` : '');
+  }
+
+  // Clear a stale success/error message as soon as the visitor starts a new entry.
+  // (form.reset() fires 'reset', not 'input', so it won't wipe the success message we set below.)
+  form.addEventListener('input', () => setStatus('', null));
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
 
@@ -15,8 +24,7 @@ export function wireSubmit({ form, status, submitButton, widgetId, apiOrigin }) 
     }
 
     submitButton.disabled = true;
-    status.textContent = '';
-    status.className = 'flyrank-widget__status';
+    setStatus('', null);
 
     try {
       const response = await fetch(`${apiOrigin}/api/submissions`, {
@@ -25,16 +33,22 @@ export function wireSubmit({ form, status, submitButton, widgetId, apiOrigin }) 
         body: JSON.stringify({ widgetId, payload, website: honeypotValue }),
       });
 
+      if (response.status === 429) {
+        setStatus('Too many submissions right now. Please wait a minute and try again.', 'error');
+        return;
+      }
+      if (response.status >= 400 && response.status < 500) {
+        setStatus("We couldn't accept that submission. Please check your details and try again.", 'error');
+        return;
+      }
       if (!response.ok) {
         throw new Error(`Submission failed (${response.status})`);
       }
 
       form.reset();
-      status.textContent = 'Thanks — your message was sent.';
-      status.classList.add('flyrank-widget__status--success');
+      setStatus('Thanks — your message was sent.', 'success');
     } catch {
-      status.textContent = 'Something went wrong. Please try again.';
-      status.classList.add('flyrank-widget__status--error');
+      setStatus('Could not reach the server. Please check your connection and try again.', 'error');
     } finally {
       submitButton.disabled = false;
     }
