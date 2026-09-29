@@ -18,22 +18,24 @@ app.use(express.json({ limit: '100kb' }));
 app.use(
   session({
     store: new PgSession({
-        pool,
-        tableName: 'sessions',
+      pool,
+      tableName: 'sessions',
     }),
     secret: env.sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: false,
-        maxAge: 1000 * 60 * 60 * 24 * 30,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.nodeEnv === 'production',
+      maxAge: 1000 * 60 * 60 * 24 * 30,
     },
   })
 );
 
 app.use(routes);
+
+app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
 app.use(errorHandler);
 
