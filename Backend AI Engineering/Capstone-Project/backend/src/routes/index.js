@@ -18,7 +18,8 @@ router.get('/health', async (req, res, next) => {
         await pool.query('SELECT 1');
         res.status(200).json({ status: 'ok', database: 'connected' });
     } catch (error) {
-        next(error);
+      error.statusCode = 503;
+      next(error);
     }
 });
 
