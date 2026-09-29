@@ -2,6 +2,7 @@ const submissionRepository = require('./submissionRepository');
 const widgetRepository = require('../widgets/widgetRepository');
 const enrichmentService = require('../enrichment/enrichmentService');
 const jobService = require('../jobs/jobService');
+const { validateSubmissionPayload } = require('./submissionValidation');
 
 function detectHoneypot(honeypotValue) {
   const isSpam = typeof honeypotValue === 'string' && honeypotValue.trim().length > 0;
@@ -18,12 +19,15 @@ async function create({ widgetId, payload, idempotencyKey, honeypotValue, ipAddr
     return null;
   }
 
+  // Throws a 400 with field-level details; nothing below runs on bad input.
+  const cleanPayload = validateSubmissionPayload(payload, widget.config);
+
   const { spam, spamReason } = detectHoneypot(honeypotValue);
 
   const { submission, isNew } = await submissionRepository.create({
     tenantId: widget.tenant_id,
     widgetId: widget.id,
-    payload,
+    payload: cleanPayload,
     ipAddress,
     userAgent,
     origin,
@@ -36,9 +40,8 @@ async function create({ widgetId, payload, idempotencyKey, honeypotValue, ipAddr
     return null;
   }
 
-  // Enrichment and job creation only run on a genuinely new row — a
-  // retried idempotent submission returns the original untouched, so it
-  // never re-enriches or queues a second confirmation for the same event.
+  // Enrichment and job creation only run on a genuinely new row — a retried
+  // idempotent submission never re-enriches or queues a second confirmation.
   if (isNew) {
     try {
       const geo = await enrichmentService.enrich(ipAddress);
@@ -51,10 +54,15 @@ async function create({ widgetId, payload, idempotencyKey, honeypotValue, ipAddr
     }
 
     if (!spam) {
-      await jobService.enqueueConfirmation({
-        tenantId: widget.tenant_id,
-        submissionId: submission.id,
-      });
+      // Queueing is a side effect too: a failure here must not fail a stored submission.
+      try {
+        await jobService.enqueueConfirmation({
+          tenantId: widget.tenant_id,
+          submissionId: submission.id,
+        });
+      } catch (error) {
+        console.error('Could not queue confirmation job:', error);
+      }
     }
   }
 
