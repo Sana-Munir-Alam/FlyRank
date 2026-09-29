@@ -31,7 +31,10 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
-    const error = new Error(body?.error || `Request failed with status ${response.status}`);
+    const detail = body?.details?.[0]?.message;
+    const error = new Error(
+      detail && body?.error ? `${body.error}: ${detail}` : body?.error || `Request failed with status ${response.status}`
+    );
     error.status = response.status;
     throw error;
   }
