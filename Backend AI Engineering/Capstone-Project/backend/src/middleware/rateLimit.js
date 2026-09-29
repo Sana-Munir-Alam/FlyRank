@@ -19,7 +19,7 @@ function ipRateLimiter(options = {}) {
     windowMs: options.windowMs ?? env.rateLimit.ip.windowMs,
     max: options.max ?? env.rateLimit.ip.max,
     keyGenerator: (req) => ipKeyGenerator(req.ip),
-    message: 'Too many requests from this IP, please slow down',
+    message: options.message || 'Too many requests from this IP, please slow down',
   });
 }
 

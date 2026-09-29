@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const env = require('../config/env');
 
 function generateCsrfToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -12,7 +13,7 @@ function issueCsrfToken(req, res) {
   res.cookie('csrf_token', token, {
     httpOnly: false, // must be readable by frontend JS to echo back in a header
     sameSite: 'lax',
-    secure: false, // mirrors the session cookie's dev setting — flip both together in production
+    secure: env.nodeEnv === 'production'
   });
 }
 

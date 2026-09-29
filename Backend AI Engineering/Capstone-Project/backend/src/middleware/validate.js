@@ -3,7 +3,11 @@ function validate(schema, target = 'body') {
     const result = schema.safeParse(req[target]);
 
     if (!result.success) {
-      return res.status(400).json({ error: 'Invalid request data' });
+      const details = result.error.issues.map((issue) => ({
+        field: issue.path.join('.'),
+        message: issue.message,
+      }));
+      return res.status(400).json({ error: 'Invalid request data', details });
     }
 
     req[target] = result.data;
